@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "EdgeGenius - Script Manager",
-  "version": "2.3.0",
+  "version": "2.5.0",
   "description": "A Tampermonkey-like user script manager with AI coding assistant.",
   "action": {
     "default_popup": "index.html",
