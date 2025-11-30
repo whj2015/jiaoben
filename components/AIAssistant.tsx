@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ChatMessage } from '../types';
-import { streamGeminiResponse } from '../services/geminiService';
+import { streamChatResponse } from '../services/geminiService';
 import { Send, Settings } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
 
@@ -50,7 +50,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onRequestSettings }) => {
 
     try {
       let fullText = '';
-      await streamGeminiResponse(userMsg.text, (chunk) => {
+      await streamChatResponse(userMsg.text, (chunk) => {
         fullText += chunk;
         setMessages(prev => 
           prev.map(msg => 

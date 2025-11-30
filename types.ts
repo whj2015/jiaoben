@@ -24,6 +24,11 @@ export enum Language {
   ES = 'es'
 }
 
+export enum AIProvider {
+  GOOGLE = 'GOOGLE',
+  DEEPSEEK = 'DEEPSEEK'
+}
+
 export interface ScriptMetadata {
   name: string;
   namespace?: string;

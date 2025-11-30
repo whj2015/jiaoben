@@ -38,9 +38,13 @@ const translations = {
     // Settings
     settingsTitle: 'Settings',
     language: 'Language',
-    apiKeyTitle: 'Gemini API Key',
-    apiKeyDesc: 'Required for the "Auto-Code" feature in the script editor.',
+    aiProvider: 'AI Model Provider',
+    apiKeyTitle: 'Google Gemini API Key',
+    deepseekKeyTitle: 'DeepSeek API Key',
+    apiKeyDesc: 'Required for Google Gemini models.',
+    deepseekKeyDesc: 'Required for DeepSeek Chat models (deepseek-chat).',
     apiKeyPlaceholder: 'Enter Google AI Studio API Key',
+    deepseekKeyPlaceholder: 'Enter DeepSeek API Key',
     saveKey: 'Save Key',
     saved: 'Saved',
     devModeTitle: 'Developer Mode',
@@ -49,7 +53,7 @@ const translations = {
     // AI Assistant
     aiWelcome: 'Hello! I can help you summarize content or answer questions while you browse.',
     askAi: 'Ask AI...',
-    aiErrorConn: 'Sorry, I encountered an error connecting to Gemini. Please try again later.',
+    aiErrorConn: 'Sorry, I encountered an error connecting to the AI service. Please try again later.',
     goToSettings: 'Go to Settings',
     configKeyMsg: 'Please configure your API Key in the settings to use the AI assistant.'
   },
@@ -84,9 +88,13 @@ const translations = {
     
     settingsTitle: '设置',
     language: '语言',
-    apiKeyTitle: 'Gemini API Key',
-    apiKeyDesc: '需要在脚本编辑器中使用“自动生成”功能。',
+    aiProvider: 'AI 模型提供商',
+    apiKeyTitle: 'Google Gemini API Key',
+    deepseekKeyTitle: 'DeepSeek API Key',
+    apiKeyDesc: '用于 Google Gemini 模型。',
+    deepseekKeyDesc: '用于 DeepSeek Chat 模型 (deepseek-chat)。',
     apiKeyPlaceholder: '输入 Google AI Studio API Key',
+    deepseekKeyPlaceholder: '输入 DeepSeek API Key',
     saveKey: '保存 Key',
     saved: '已保存',
     devModeTitle: '开发者模式',
@@ -94,7 +102,7 @@ const translations = {
 
     aiWelcome: '你好！我可以在你浏览网页时帮你总结内容或回答问题。',
     askAi: '询问 AI...',
-    aiErrorConn: '抱歉，连接 Gemini 时出错。请稍后再试。',
+    aiErrorConn: '抱歉，连接 AI 服务时出错。请稍后再试。',
     goToSettings: '前往设置',
     configKeyMsg: '请在设置中配置 API Key 以使用 AI 助手。'
   },
@@ -129,9 +137,13 @@ const translations = {
     
     settingsTitle: '設定',
     language: '言語',
-    apiKeyTitle: 'Gemini API Key',
-    apiKeyDesc: 'エディタの自動生成機能に必要です。',
+    aiProvider: 'AI プロバイダー',
+    apiKeyTitle: 'Google Gemini API Key',
+    deepseekKeyTitle: 'DeepSeek API Key',
+    apiKeyDesc: 'Google Geminiモデルに必要です。',
+    deepseekKeyDesc: 'DeepSeek Chatモデル (deepseek-chat) に必要です。',
     apiKeyPlaceholder: 'Google AI Studio API Keyを入力',
+    deepseekKeyPlaceholder: 'DeepSeek API Keyを入力',
     saveKey: '保存',
     saved: '保存完了',
     devModeTitle: '開発者モード',
@@ -139,7 +151,7 @@ const translations = {
 
     aiWelcome: 'こんにちは！ブラウジング中の要約や質問にお答えします。',
     askAi: 'AIに質問...',
-    aiErrorConn: 'Geminiへの接続エラーが発生しました。',
+    aiErrorConn: 'AIサービスへの接続エラーが発生しました。',
     goToSettings: '設定へ移動',
     configKeyMsg: 'AIアシスタントを使用するには、設定でAPIキーを構成してください。'
   },
@@ -174,9 +186,13 @@ const translations = {
     
     settingsTitle: 'Ajustes',
     language: 'Idioma',
+    aiProvider: 'Proveedor de IA',
     apiKeyTitle: 'Gemini API Key',
-    apiKeyDesc: 'Requerido para la función "Auto-Código" en el editor.',
+    deepseekKeyTitle: 'DeepSeek API Key',
+    apiKeyDesc: 'Requerido para modelos Google Gemini.',
+    deepseekKeyDesc: 'Requerido para modelos DeepSeek Chat (deepseek-chat).',
     apiKeyPlaceholder: 'Ingresa la Google AI Studio API Key',
+    deepseekKeyPlaceholder: 'Ingresa la DeepSeek API Key',
     saveKey: 'Guardar Key',
     saved: 'Guardado',
     devModeTitle: 'Modo Desarrollador',
@@ -184,7 +200,7 @@ const translations = {
 
     aiWelcome: '¡Hola! Puedo ayudarte a resumir contenido o responder preguntas mientras navegas.',
     askAi: 'Preguntar a la IA...',
-    aiErrorConn: 'Lo siento, error al conectar con Gemini.',
+    aiErrorConn: 'Lo siento, error al conectar con el servicio de IA.',
     goToSettings: 'Ir a Ajustes',
     configKeyMsg: 'Configura tu API Key en los ajustes para usar el asistente de IA.'
   }

@@ -1,5 +1,121 @@
 import { GoogleGenAI } from "@google/genai";
-import { getStoredApiKey } from "./scriptService";
+import { getStoredApiKey, getStoredDeepSeekKey, getStoredAIProvider } from "./scriptService";
+import { AIProvider } from "../types";
+
+// --- Google Gemini Implementation ---
+const callGeminiStream = async (
+  apiKey: string,
+  systemInstruction: string,
+  userContent: string,
+  onChunk: (text: string) => void
+) => {
+  const ai = new GoogleGenAI({ apiKey: apiKey });
+  const model = 'gemini-2.5-flash';
+
+  const result = await ai.models.generateContentStream({
+    model: model,
+    contents: userContent,
+    config: {
+      systemInstruction: systemInstruction,
+    }
+  });
+
+  for await (const chunk of result) {
+    const text = chunk.text;
+    if (text) {
+      onChunk(text);
+    }
+  }
+};
+
+const callGeminiChatStream = async (
+  apiKey: string,
+  systemInstruction: string,
+  message: string,
+  onChunk: (text: string) => void
+) => {
+  const ai = new GoogleGenAI({ apiKey: apiKey });
+  const model = 'gemini-2.5-flash';
+
+  const chat = ai.chats.create({
+    model: model,
+    config: {
+      systemInstruction: systemInstruction,
+    }
+  });
+
+  const result = await chat.sendMessageStream({ message: message });
+
+  for await (const chunk of result) {
+    const text = chunk.text;
+    if (text) {
+      onChunk(text);
+    }
+  }
+};
+
+// --- DeepSeek Implementation (OpenAI Compatible) ---
+const callDeepSeekStream = async (
+  apiKey: string,
+  systemInstruction: string,
+  userContent: string | { role: string, content: string }[],
+  onChunk: (text: string) => void
+) => {
+  const messages = [];
+  if (systemInstruction) {
+    messages.push({ role: 'system', content: systemInstruction });
+  }
+
+  if (typeof userContent === 'string') {
+    messages.push({ role: 'user', content: userContent });
+  } else if (Array.isArray(userContent)) {
+    messages.push(...userContent);
+  }
+
+  const response = await fetch('https://api.deepseek.com/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: messages,
+      stream: true
+    })
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`DeepSeek API Error: ${response.status} ${response.statusText} - ${errText}`);
+  }
+
+  const reader = response.body?.getReader();
+  const decoder = new TextDecoder();
+  if (!reader) return;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = decoder.decode(value);
+    const lines = chunk.split('\n');
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const data = line.slice(6);
+        if (data === '[DONE]') return;
+        try {
+          const json = JSON.parse(data);
+          const content = json.choices[0]?.delta?.content;
+          if (content) onChunk(content);
+        } catch (e) {
+          // ignore invalid json or incomplete chunks
+        }
+      }
+    }
+  }
+};
+
+// --- Main Service Functions ---
 
 export const generateScriptWithAI = async (
   requirement: string,
@@ -8,12 +124,17 @@ export const generateScriptWithAI = async (
   contextUrl?: string
 ) => {
   try {
-    let apiKey = await getStoredApiKey();
-    if (!apiKey) apiKey = process.env.API_KEY || "";
-    if (!apiKey) throw new Error("MISSING_API_KEY");
+    const provider = await getStoredAIProvider();
+    
+    let apiKey = '';
+    if (provider === AIProvider.GOOGLE) {
+      apiKey = await getStoredApiKey();
+      if (!apiKey) apiKey = process.env.API_KEY || "";
+    } else if (provider === AIProvider.DEEPSEEK) {
+      apiKey = await getStoredDeepSeekKey();
+    }
 
-    const ai = new GoogleGenAI({ apiKey: apiKey });
-    const model = 'gemini-2.5-flash'; 
+    if (!apiKey) throw new Error("MISSING_API_KEY");
 
     let systemPrompt = `You are an expert JavaScript developer specializing in UserScripts (Tampermonkey/Violentmonkey).
     Your task is to write a complete, valid UserScript based on the user's requirement.
@@ -56,56 +177,53 @@ export const generateScriptWithAI = async (
 
       userContent = `Current Code:\n${currentCode}\n\nNew Requirement/Change:\n${requirement}`;
     }
-    
-    const result = await ai.models.generateContentStream({
-      model: model,
-      contents: userContent,
-      config: {
-        systemInstruction: systemPrompt,
-      }
-    });
 
-    for await (const chunk of result) {
-      const text = chunk.text;
-      if (text) {
-        onChunk(text);
-      }
+    if (provider === AIProvider.GOOGLE) {
+      await callGeminiStream(apiKey, systemPrompt, userContent, onChunk);
+    } else {
+      await callDeepSeekStream(apiKey, systemPrompt, userContent, onChunk);
     }
+
   } catch (error) {
-    console.error("Gemini API Error:", error);
+    console.error("AI Generation Error:", error);
     throw error;
   }
 };
 
-export const streamGeminiResponse = async (
+export const streamChatResponse = async (
   message: string,
   onChunk: (text: string) => void
 ) => {
   try {
-    let apiKey = await getStoredApiKey();
-    if (!apiKey) apiKey = process.env.API_KEY || "";
+    const provider = await getStoredAIProvider();
+    
+    let apiKey = '';
+    if (provider === AIProvider.GOOGLE) {
+      apiKey = await getStoredApiKey();
+      if (!apiKey) apiKey = process.env.API_KEY || "";
+    } else if (provider === AIProvider.DEEPSEEK) {
+      apiKey = await getStoredDeepSeekKey();
+    }
+
     if (!apiKey) throw new Error("MISSING_API_KEY");
 
-    const ai = new GoogleGenAI({ apiKey: apiKey });
-    const model = 'gemini-2.5-flash';
+    const systemInstruction = "You are a helpful AI assistant inside a browser extension manager. Help the user with web browsing tasks, summarizing content, or explaining scripts.";
 
-    const chat = ai.chats.create({
-      model: model,
-      config: {
-        systemInstruction: "You are a helpful AI assistant inside a browser extension manager. Help the user with web browsing tasks, summarizing content, or explaining scripts.",
-      }
-    });
-
-    const result = await chat.sendMessageStream({ message: message });
-
-    for await (const chunk of result) {
-      const text = chunk.text;
-      if (text) {
-        onChunk(text);
-      }
+    if (provider === AIProvider.GOOGLE) {
+      await callGeminiChatStream(apiKey, systemInstruction, message, onChunk);
+    } else {
+      // DeepSeek doesn't have a specific 'chat' object like Google GenAI SDK, so we treat it as a fresh stream with history managed by client if needed. 
+      // For this simple assistant, we are currently only passing the last user message in the 'message' arg.
+      // To properly support chat history with DeepSeek in this architecture, we would need to pass the full history. 
+      // For now, we will just send the single message to keep it simple, or improved later.
+      // NOTE: The previous Google implementation also only sent `message` without history context in `sendMessageStream` unless `chat` object persisted.
+      // Since `streamGeminiResponse` created a new `chat` instance every time, it didn't strictly maintain history either in the Service layer (though the UI does).
+      // We will emulate the same "stateless" behavior for now.
+      await callDeepSeekStream(apiKey, systemInstruction, message, onChunk);
     }
+
   } catch (error) {
-    console.error("Gemini Chat Error:", error);
+    console.error("AI Chat Error:", error);
     throw error;
   }
 };

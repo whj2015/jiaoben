@@ -1,4 +1,4 @@
-import { UserScript, ScriptMetadata, Language } from '../types';
+import { UserScript, ScriptMetadata, Language, AIProvider } from '../types';
 
 declare var chrome: any;
 
@@ -164,6 +164,51 @@ export const setStoredApiKey = async (apiKey: string): Promise<void> => {
   } else {
     localStorage.setItem('gemini_api_key', apiKey);
     return Promise.resolve();
+  }
+};
+
+export const getStoredDeepSeekKey = async (): Promise<string> => {
+  if (isExtensionEnv) {
+    return new Promise((resolve) => {
+      const storage = chrome.storage.sync || chrome.storage.local;
+      storage.get(['deepseek_api_key'], (result: any) => {
+        resolve(result.deepseek_api_key || '');
+      });
+    });
+  } else {
+    return localStorage.getItem('deepseek_api_key') || '';
+  }
+};
+
+export const setStoredDeepSeekKey = async (apiKey: string): Promise<void> => {
+if (isExtensionEnv) {
+  return new Promise((resolve) => {
+    const storage = chrome.storage.sync || chrome.storage.local;
+    storage.set({ deepseek_api_key: apiKey }, resolve);
+  });
+} else {
+  localStorage.setItem('deepseek_api_key', apiKey);
+  return Promise.resolve();
+}
+};
+
+export const getStoredAIProvider = async (): Promise<AIProvider> => {
+  if (isExtensionEnv) {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['ai_provider'], (result: any) => {
+        resolve((result.ai_provider as AIProvider) || AIProvider.GOOGLE);
+      });
+    });
+  } else {
+    return (localStorage.getItem('ai_provider') as AIProvider) || AIProvider.GOOGLE;
+  }
+};
+
+export const setStoredAIProvider = async (provider: AIProvider): Promise<void> => {
+  if (isExtensionEnv) {
+    await chrome.storage.local.set({ ai_provider: provider });
+  } else {
+    localStorage.setItem('ai_provider', provider);
   }
 };
 
