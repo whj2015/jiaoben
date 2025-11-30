@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { UserScript, ScriptVersion } from '../types';
-import { DEFAULT_SCRIPT_TEMPLATE, saveScript, createScriptFromCode } from '../services/scriptService';
+import { DEFAULT_SCRIPT_TEMPLATE, saveScript, createScriptFromCode, clearScriptHistory } from '../services/scriptService';
 import { generateScriptWithAI } from '../services/geminiService';
 import { getActiveTabInfo } from '../services/extensionService';
-import { Save, Sparkles, AlertCircle, ArrowLeft, RefreshCw, Link2, History, RotateCcw, X, Clock, Split, ChevronRight } from 'lucide-react';
+import { Save, Sparkles, AlertCircle, ArrowLeft, RefreshCw, Link2, History, RotateCcw, X, Clock, Split, ChevronRight, Trash2 } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
+import { diffLines, processDiffWithContext } from '../utils/simpleDiff';
 
 interface ScriptEditorProps {
   initialScript?: UserScript | null;
@@ -28,14 +29,23 @@ const HistoryDiffModal: React.FC<{
   onClose: () => void;
 }> = ({ version, currentCode, onRestore, onClose }) => {
   const { t } = useTranslation();
+  const [onlyChanges, setOnlyChanges] = useState(false);
 
-  // Simple line splitter
-  const oldLines = version.code.split('\n');
-  const newLines = currentCode.split('\n');
-  const maxLines = Math.max(oldLines.length, newLines.length);
+  // Memoize diff calculation
+  const diffData = React.useMemo(() => {
+    const rawDiff = diffLines(version.code, currentCode);
+    if (onlyChanges) {
+      return processDiffWithContext(rawDiff);
+    }
+    return [{ type: 'diff', lines: rawDiff } as const];
+  }, [version.code, currentCode, onlyChanges]);
+
+  let oldLineNum = 1;
+  let newLineNum = 1;
 
   return (
     <div className="absolute inset-0 z-50 bg-white flex flex-col animate-in fade-in duration-200">
+      {/* Header */}
       <div className="p-3 border-b border-gray-200 bg-gray-50 flex justify-between items-center shadow-sm z-10">
         <div className="flex items-center gap-3">
           <button onClick={onClose} className="p-1 hover:bg-gray-200 rounded-full transition-colors">
@@ -51,7 +61,17 @@ const HistoryDiffModal: React.FC<{
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+           <label className="flex items-center gap-2 text-xs font-medium text-gray-700 cursor-pointer select-none">
+             <input 
+               type="checkbox" 
+               checked={onlyChanges} 
+               onChange={(e) => setOnlyChanges(e.target.checked)}
+               className="rounded text-purple-600 focus:ring-purple-500" 
+             />
+             {t('onlyChanges')}
+           </label>
+           <div className="h-4 w-px bg-gray-300 mx-1"></div>
            <button 
              onClick={onRestore}
              className="bg-blue-600 text-white px-3 py-1.5 rounded text-xs font-medium flex items-center gap-1.5 hover:bg-blue-700 shadow-sm"
@@ -61,40 +81,55 @@ const HistoryDiffModal: React.FC<{
         </div>
       </div>
 
-      <div className="flex-1 flex overflow-hidden text-xs font-mono">
-        {/* Left Side: History */}
-        <div className="flex-1 flex flex-col border-r border-gray-200 bg-red-50/30 overflow-hidden">
-          <div className="p-2 bg-gray-100 border-b border-gray-200 text-center font-semibold text-gray-600">
-             {t('selectedVersion')} (v{version.version})
-          </div>
-          <div className="flex-1 overflow-auto p-2">
-            <pre className="whitespace-pre">
-               {oldLines.map((line, i) => (
-                 <div key={i} className="flex">
-                   <span className="w-8 text-gray-400 select-none text-right pr-2">{i+1}</span>
-                   <span className="flex-1">{line}</span>
-                 </div>
-               ))}
-            </pre>
-          </div>
-        </div>
+      {/* Diff Content */}
+      <div className="flex-1 overflow-auto bg-white font-mono text-xs">
+        {diffData.map((block, bIdx) => {
+          if (block.type === 'collapsed') {
+            // Update line numbers for hidden lines
+            const lineCount = block.lines.length;
+            oldLineNum += lineCount;
+            newLineNum += lineCount;
+            
+            return (
+              <div 
+                key={bIdx} 
+                onClick={() => setOnlyChanges(false)}
+                className="bg-gray-100 py-2 px-4 text-gray-500 text-center cursor-pointer hover:bg-gray-200 select-none border-y border-gray-200"
+              >
+                {t('linesHidden').replace('{{count}}', String(lineCount))} — {t('showAll')}
+              </div>
+            );
+          }
 
-        {/* Right Side: Current */}
-        <div className="flex-1 flex flex-col bg-green-50/30 overflow-hidden">
-          <div className="p-2 bg-gray-100 border-b border-gray-200 text-center font-semibold text-gray-600">
-             {t('currentCode')}
-          </div>
-          <div className="flex-1 overflow-auto p-2">
-            <pre className="whitespace-pre">
-               {newLines.map((line, i) => (
-                 <div key={i} className="flex">
-                   <span className="w-8 text-gray-400 select-none text-right pr-2">{i+1}</span>
-                   <span className="flex-1">{line}</span>
+          return block.lines.map((line, lIdx) => {
+             const isAdded = line.added;
+             const isRemoved = line.removed;
+             const currentOld = isAdded ? null : oldLineNum++;
+             const currentNew = isRemoved ? null : newLineNum++;
+
+             return (
+               <div 
+                 key={`${bIdx}-${lIdx}`} 
+                 className={`flex ${isAdded ? 'bg-green-50' : isRemoved ? 'bg-red-50' : ''} hover:bg-gray-50`}
+               >
+                 {/* Line Numbers */}
+                 <div className="w-16 flex-shrink-0 flex text-gray-400 select-none bg-gray-50 border-r border-gray-200 text-[10px] leading-5">
+                   <div className="w-8 text-right pr-1">{isAdded ? '' : currentOld}</div>
+                   <div className="w-8 text-right pr-1">{isRemoved ? '' : currentNew}</div>
                  </div>
-               ))}
-            </pre>
-          </div>
-        </div>
+                 
+                 {/* Code Content */}
+                 <div className="flex-1 px-2 leading-5 whitespace-pre-wrap break-all relative">
+                   {isAdded && <span className="absolute left-0 text-green-600 font-bold">+</span>}
+                   {isRemoved && <span className="absolute left-0 text-red-600 font-bold">-</span>}
+                   <span className={`pl-3 block ${isAdded ? 'text-green-900' : isRemoved ? 'text-red-900 line-through opacity-70' : 'text-gray-800'}`}>
+                     {line.value || ' '}
+                   </span>
+                 </div>
+               </div>
+             );
+          });
+        })}
       </div>
     </div>
   );
@@ -146,6 +181,17 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
       setCode(viewingVersion.code);
       setViewingVersion(null);
       setShowHistory(false);
+    }
+  };
+
+  const handleClearHistory = async () => {
+    if (!initialScript) return;
+    if (confirm(t('confirmClearHistory'))) {
+       await clearScriptHistory(initialScript.id);
+       // Reset local history to update UI immediately
+       initialScript.history = []; 
+       setShowHistory(false);
+       alert(t('historyCleared'));
     }
   };
 
@@ -280,9 +326,20 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
                <h3 className="font-semibold text-xs text-gray-700 flex items-center gap-1">
                  <Clock size={14} /> {t('history')}
                </h3>
-               <button onClick={() => setShowHistory(false)} className="text-gray-400 hover:text-gray-700">
-                 <X size={16} />
-               </button>
+               <div className="flex items-center gap-1">
+                 {initialScript?.history && initialScript.history.length > 0 && (
+                   <button 
+                     onClick={handleClearHistory}
+                     className="text-gray-400 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors"
+                     title={t('clearHistory')}
+                   >
+                     <Trash2 size={14} />
+                   </button>
+                 )}
+                 <button onClick={() => setShowHistory(false)} className="text-gray-400 hover:text-gray-700 p-1">
+                   <X size={16} />
+                 </button>
+               </div>
              </div>
              <div className="flex-1 overflow-y-auto p-2 space-y-2">
                 {!initialScript?.history || initialScript.history.length === 0 ? (

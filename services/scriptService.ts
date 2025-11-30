@@ -121,6 +121,28 @@ export const saveScript = async (script: UserScript): Promise<void> => {
 };
 
 /**
+ * 清除特定脚本的历史记录
+ */
+export const clearScriptHistory = async (id: string): Promise<void> => {
+  const scripts = await getScripts();
+  const script = scripts.find(s => s.id === id);
+  
+  if (script) {
+    script.history = [];
+    
+    const index = scripts.findIndex(s => s.id === id);
+    if (index >= 0) {
+      scripts[index] = script;
+      if (isExtensionEnv) {
+        await chrome.storage.local.set({ user_scripts: scripts });
+      } else {
+        localStorage.setItem('user_scripts', JSON.stringify(scripts));
+      }
+    }
+  }
+};
+
+/**
  * 删除脚本
  */
 export const deleteScript = async (id: string): Promise<void> => {
