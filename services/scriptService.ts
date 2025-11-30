@@ -7,7 +7,7 @@ const isExtensionEnv = typeof chrome !== 'undefined' && !!chrome.storage;
 // 默认脚本模板
 export const DEFAULT_SCRIPT_TEMPLATE = `// ==UserScript==
 // @name         New Script
-// @namespace    http://tampermonkey.net/
+// @namespace    https://www.acgline.org/
 // @version      0.1
 // @description  try to take over the world!
 // @author       You
