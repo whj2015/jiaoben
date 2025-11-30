@@ -9,6 +9,13 @@ export interface UserScript {
   enabled: boolean;
   runAt: 'document-start' | 'document-end' | 'document-idle';
   updatedAt: number;
+  history?: ScriptVersion[]; // 历史版本记录
+}
+
+export interface ScriptVersion {
+  timestamp: number;
+  code: string;
+  version: string;
 }
 
 export enum ViewState {

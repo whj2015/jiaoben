@@ -1,4 +1,4 @@
-import { UserScript, ScriptMetadata, Language, AIProvider } from '../types';
+import { UserScript, ScriptMetadata, Language, AIProvider, ScriptVersion } from '../types';
 
 declare var chrome: any;
 
@@ -83,8 +83,29 @@ export const saveScript = async (script: UserScript): Promise<void> => {
   const index = scripts.findIndex(s => s.id === script.id);
   
   if (index >= 0) {
+    // 更新现有脚本
+    const oldScript = scripts[index];
+    
+    // 如果代码发生变化，保存历史版本
+    if (oldScript.code !== script.code) {
+      const historyEntry: ScriptVersion = {
+        timestamp: oldScript.updatedAt || Date.now(),
+        code: oldScript.code,
+        version: oldScript.version
+      };
+      
+      // 合并历史记录，限制最大数量 (例如 30 条)
+      const existingHistory = oldScript.history || [];
+      script.history = [historyEntry, ...existingHistory].slice(0, 30);
+    } else {
+      // 代码未变，保留原有历史
+      script.history = oldScript.history || [];
+    }
+
     scripts[index] = script;
   } else {
+    // 新增脚本
+    script.history = [];
     scripts.push(script);
   }
 
@@ -117,7 +138,17 @@ export const toggleScript = async (id: string, enabled: boolean): Promise<void> 
   const script = scripts.find(s => s.id === id);
   if (script) {
     script.enabled = enabled;
-    await saveScript(script);
+    // 切换状态不视为代码变更，不记录历史
+    // 重新保存以更新状态
+    const index = scripts.findIndex(s => s.id === id);
+    if (index >= 0) {
+      scripts[index] = script;
+      if (isExtensionEnv) {
+        await chrome.storage.local.set({ user_scripts: scripts });
+      } else {
+        localStorage.setItem('user_scripts', JSON.stringify(scripts));
+      }
+    }
   }
 };
 
@@ -136,7 +167,8 @@ export const createScriptFromCode = (code: string, id?: string): UserScript => {
     code: code,
     enabled: true,
     runAt: (meta.runAt as any) || 'document-idle',
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
+    history: [] // 初始化空历史
   };
 };
 

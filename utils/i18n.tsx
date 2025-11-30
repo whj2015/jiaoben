@@ -35,6 +35,14 @@ const translations = {
     context: 'Context',
     globalContext: 'Global (No specific site)',
     
+    // History
+    history: 'History',
+    viewHistory: 'View History',
+    restore: 'Restore',
+    restoreConfirm: 'Are you sure you want to restore this version? Current unsaved changes will be lost.',
+    noHistory: 'No history available.',
+    version: 'Version',
+    
     // Settings
     settingsTitle: 'Settings',
     language: 'Language',
@@ -86,6 +94,13 @@ const translations = {
     context: '上下文',
     globalContext: '全局 (未检测到特定网站)',
     
+    history: '历史记录',
+    viewHistory: '查看历史',
+    restore: '恢复',
+    restoreConfirm: '确定要恢复此版本吗？当前未保存的更改将丢失。',
+    noHistory: '暂无历史记录。',
+    version: '版本',
+    
     settingsTitle: '设置',
     language: '语言',
     aiProvider: 'AI 模型提供商',
@@ -135,6 +150,13 @@ const translations = {
     context: 'コンテキスト',
     globalContext: 'グローバル (特定サイトなし)',
     
+    history: '履歴',
+    viewHistory: '履歴を表示',
+    restore: '復元',
+    restoreConfirm: 'このバージョンを復元してもよろしいですか？保存されていない変更は失われます。',
+    noHistory: '履歴はありません。',
+    version: 'バージョン',
+    
     settingsTitle: '設定',
     language: '言語',
     aiProvider: 'AI プロバイダー',
@@ -183,6 +205,13 @@ const translations = {
     apiKeyMissing: 'Por favor configura tu API Key en Ajustes primero.',
     context: 'Contexto',
     globalContext: 'Global (Sin sitio específico)',
+    
+    history: 'Historial',
+    viewHistory: 'Ver Historial',
+    restore: 'Restaurar',
+    restoreConfirm: '¿Seguro que quieres restaurar esta versión? Se perderán los cambios no guardados.',
+    noHistory: 'No hay historial disponible.',
+    version: 'Versión',
     
     settingsTitle: 'Ajustes',
     language: 'Idioma',
