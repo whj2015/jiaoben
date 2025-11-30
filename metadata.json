@@ -1,0 +1,5 @@
+{
+  "name": "EdgeGenius Extension",
+  "description": "一个集成了标签管理、快速笔记和 Gemini AI 助手的现代浏览器扩展原型。",
+  "requestFramePermissions": []
+}

@@ -1,0 +1,190 @@
+import { UserScript, ScriptMetadata, Language } from '../types';
+
+declare var chrome: any;
+
+const isExtensionEnv = typeof chrome !== 'undefined' && !!chrome.storage;
+
+// 默认脚本模板
+export const DEFAULT_SCRIPT_TEMPLATE = `// ==UserScript==
+// @name         New Script
+// @namespace    http://tampermonkey.net/
+// @version      0.1
+// @description  try to take over the world!
+// @author       You
+// @match        *://*/*
+// @grant        none
+// ==/UserScript==
+
+(function() {
+    'use strict';
+
+    console.log('EdgeGenius Script Running...');
+    // Your code here...
+})();`;
+
+/**
+ * 解析用户脚本元数据
+ */
+export const parseMetadata = (code: string): ScriptMetadata => {
+  const metadata: ScriptMetadata = {
+    name: 'Untitled Script',
+    match: [],
+    exclude: []
+  };
+
+  const metaBlockRegex = /\/\/ ==UserScript==([\s\S]*?)\/\/ ==\/UserScript==/;
+  const match = code.match(metaBlockRegex);
+
+  if (match) {
+    const content = match[1];
+    const lines = content.split('\n');
+    
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('// @')) return;
+
+      const parts = trimmed.substring(4).split(/\s+/);
+      const key = parts[0];
+      const value = parts.slice(1).join(' ');
+
+      if (key === 'name') metadata.name = value;
+      else if (key === 'version') metadata.version = value;
+      else if (key === 'description') metadata.description = value;
+      else if (key === 'match') metadata.match.push(value);
+      else if (key === 'exclude') metadata.exclude.push(value);
+      else if (key === 'run-at') metadata.runAt = value;
+    });
+  }
+
+  return metadata;
+};
+
+/**
+ * 获取所有脚本
+ */
+export const getScripts = async (): Promise<UserScript[]> => {
+  if (isExtensionEnv) {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['user_scripts'], (result: any) => {
+        resolve(result.user_scripts || []);
+      });
+    });
+  } else {
+    const stored = localStorage.getItem('user_scripts');
+    return stored ? JSON.parse(stored) : [];
+  }
+};
+
+/**
+ * 保存脚本 (新增或更新)
+ */
+export const saveScript = async (script: UserScript): Promise<void> => {
+  const scripts = await getScripts();
+  const index = scripts.findIndex(s => s.id === script.id);
+  
+  if (index >= 0) {
+    scripts[index] = script;
+  } else {
+    scripts.push(script);
+  }
+
+  if (isExtensionEnv) {
+    await chrome.storage.local.set({ user_scripts: scripts });
+  } else {
+    localStorage.setItem('user_scripts', JSON.stringify(scripts));
+  }
+};
+
+/**
+ * 删除脚本
+ */
+export const deleteScript = async (id: string): Promise<void> => {
+  let scripts = await getScripts();
+  scripts = scripts.filter(s => s.id !== id);
+
+  if (isExtensionEnv) {
+    await chrome.storage.local.set({ user_scripts: scripts });
+  } else {
+    localStorage.setItem('user_scripts', JSON.stringify(scripts));
+  }
+};
+
+/**
+ * 切换脚本启用状态
+ */
+export const toggleScript = async (id: string, enabled: boolean): Promise<void> => {
+  const scripts = await getScripts();
+  const script = scripts.find(s => s.id === id);
+  if (script) {
+    script.enabled = enabled;
+    await saveScript(script);
+  }
+};
+
+/**
+ * 从代码生成 UserScript 对象
+ */
+export const createScriptFromCode = (code: string, id?: string): UserScript => {
+  const meta = parseMetadata(code);
+  return {
+    id: id || Date.now().toString(),
+    name: meta.name,
+    description: meta.description || '',
+    version: meta.version || '0.1',
+    match: meta.match.length > 0 ? meta.match : ['*://*/*'],
+    exclude: meta.exclude,
+    code: code,
+    enabled: true,
+    runAt: (meta.runAt as any) || 'document-idle',
+    updatedAt: Date.now()
+  };
+};
+
+// --- Storage Helpers ---
+
+export const getStoredApiKey = async (): Promise<string> => {
+    if (isExtensionEnv) {
+      return new Promise((resolve) => {
+        const storage = chrome.storage.sync || chrome.storage.local;
+        storage.get(['gemini_api_key'], (result: any) => {
+          resolve(result.gemini_api_key || '');
+        });
+      });
+    } else {
+      return localStorage.getItem('gemini_api_key') || '';
+    }
+};
+  
+export const setStoredApiKey = async (apiKey: string): Promise<void> => {
+  if (isExtensionEnv) {
+    return new Promise((resolve) => {
+      const storage = chrome.storage.sync || chrome.storage.local;
+      storage.set({ gemini_api_key: apiKey }, resolve);
+    });
+  } else {
+    localStorage.setItem('gemini_api_key', apiKey);
+    return Promise.resolve();
+  }
+};
+
+export const getStoredLanguage = async (): Promise<Language> => {
+  if (isExtensionEnv) {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['app_language'], (result: any) => {
+        // Default fallback to ZH_CN if not set
+        resolve((result.app_language as Language) || Language.ZH_CN);
+      });
+    });
+  } else {
+    // Default fallback to ZH_CN if not set
+    return (localStorage.getItem('app_language') as Language) || Language.ZH_CN;
+  }
+};
+
+export const setStoredLanguage = async (lang: Language): Promise<void> => {
+  if (isExtensionEnv) {
+    await chrome.storage.local.set({ app_language: lang });
+  } else {
+    localStorage.setItem('app_language', lang);
+  }
+};
