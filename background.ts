@@ -56,42 +56,55 @@ async function checkAndInjectScripts(tabId: number, url: string) {
 }
 
 function injectScript(tabId: number, script: any) {
-  // 包装用户代码，提供基本的 GM API 模拟
-  const wrappedCode = `
-    (function() {
-      // 简单的 GM API 模拟
-      const GM_info = {
-        script: {
-          name: "${script.name}",
-          version: "${script.version}",
-          description: "${script.description}"
-        }
-      };
-
-      const GM_log = (message) => console.log("[GM:${script.name}]", message);
-      
-      // 注意：真实的 GM_getValue/setValue 需要通过 sendMessage 与 background 通信
-      // 这里仅做简单的内存模拟，防止报错
-      const GM_setValue = (key, value) => localStorage.setItem("GM_${script.id}_" + key, value);
-      const GM_getValue = (key, def) => localStorage.getItem("GM_${script.id}_" + key) || def;
-
-      try {
-        ${script.code}
-      } catch (e) {
-        console.error("[EdgeGenius] Script error in '${script.name}':", e);
-      }
-    })();
-  `;
-
+  // 使用 func + args 的方式注入，避免字符串拼接导致的 SyntaxError
   chrome.scripting.executeScript({
     target: { tabId: tabId },
-    func: (code: string) => {
-       const el = document.createElement('script');
-       el.textContent = code;
-       document.head.appendChild(el);
-       el.remove();
+    func: (name: string, version: string, description: string, userCode: string) => {
+       // 在页面上下文中构建执行环境
+       // 1. 定义简单的 GM_info 和 GM_log
+       (window as any).GM_info = {
+         script: { name, version, description }
+       };
+       
+       const logPrefix = `[GM:${name}]`;
+       const safeLog = (msg: any) => console.log(logPrefix, msg);
+
+       // 2. 简单的存储模拟 (基于 localStorage)
+       // 注意：这是运行在页面上下文的，真实的扩展通常通过 postMessage 和 background 通信
+       const storagePrefix = `GM_${name}_`;
+       (window as any).GM_setValue = (key: string, value: any) => {
+         try {
+           localStorage.setItem(storagePrefix + key, String(value));
+         } catch(e) { console.error(logPrefix, "GM_setValue failed", e); }
+       };
+       (window as any).GM_getValue = (key: string, def: any) => {
+          return localStorage.getItem(storagePrefix + key) || def;
+       };
+       (window as any).GM_log = safeLog;
+
+       // 3. 构建并插入 Script 标签
+       // 这是最安全的方法，将代码作为文本节点插入，避免了 eval 或特殊的转义问题
+       try {
+         const scriptEl = document.createElement('script');
+         // 将用户代码包裹在 IIFE 中，并加上 try-catch
+         // 我们使用 textContent 赋值，不需要对 userCode 进行 JSON.stringify 转义，浏览器会处理
+         scriptEl.textContent = `
+           (function() {
+             try {
+               ${userCode}
+             } catch (e) {
+               console.error("${logPrefix} Runtime Error:", e);
+             }
+           })();
+         `;
+         (document.head || document.documentElement).appendChild(scriptEl);
+         scriptEl.remove(); // 执行后移除标签保持 DOM 清洁
+         console.log(`${logPrefix} Injected successfully.`);
+       } catch (e) {
+         console.error(`${logPrefix} Injection failed:`, e);
+       }
     },
-    args: [wrappedCode],
-    world: 'MAIN', // 在主世界执行，以便访问 window 对象
+    args: [script.name, script.version, script.description || '', script.code],
+    world: 'MAIN', // 在主世界执行，以便访问 window 对象和页面 DOM
   });
 }

@@ -139,19 +139,23 @@ export const generateScriptWithAI = async (
     let systemPrompt = `You are an expert JavaScript developer specializing in UserScripts (Tampermonkey/Violentmonkey).
     Your task is to write a complete, valid UserScript based on the user's requirement.
     
-    Rules:
-    1. Start with the metadata block // ==UserScript== ... // ==/UserScript==
-    2. Write clean, ES6+ JavaScript code.
-    3. Do not wrap the code in markdown blocks (like \`\`\`javascript), just return the raw code.
-    4. Add comments explaining key logic.
+    CRITICAL RULES:
+    1. **Metadata**: Start with // ==UserScript== block.
+    2. **Raw Code**: Return ONLY valid JavaScript. Do NOT use markdown code blocks (\`\`\`).
+    3. **Robustness**: 
+       - Modern websites (SPA, React, Vue) load content asynchronously. 
+       - You MUST NOT assume elements exist immediately on 'document-end'.
+       - Use 'MutationObserver' or 'setInterval' to wait for elements to appear before acting.
+       - Always wrap your logic in try-catch blocks to prevent crashing the page.
+    4. **Safety**: Wrap your code in an IIFE (Immediately Invoked Function Expression) to avoid global namespace pollution.
     `;
 
     if (contextUrl) {
       systemPrompt += `\n
       CONTEXT AWARENESS:
-      The user is currently browsing: ${contextUrl}
-      Unless the user explicitly asks for a global script, you MUST set the @match rule to target this domain (e.g., *://example.com/*).
-      Optimize the script for this specific site's DOM structure if implied by the request.
+      The user is browsing: ${contextUrl}
+      - Set @match to target this domain (e.g., *://example.com/*).
+      - Write logic specifically for this site's structure.
       `;
     } else {
       systemPrompt += `\nInclude smart @match rules based on the requirement.`;
@@ -168,11 +172,12 @@ export const generateScriptWithAI = async (
       1. Keep the existing metadata unless the requirement specifically changes it.
       2. Preserve existing functionality if it doesn't conflict with the new requirement.
       3. Return the FULL updated script code (not just the diff).
-      4. Do not wrap the code in markdown blocks.
+      4. Do NOT use markdown code blocks (\`\`\`).
+      5. Ensure the code handles dynamic DOM loading (SPAs) gracefully.
       `;
 
       if (contextUrl) {
-        systemPrompt += `\nContext URL: ${contextUrl} (Use this if you need to verify logic against the current site)`;
+        systemPrompt += `\nContext URL: ${contextUrl} (Use this to verify logic against current site)`;
       }
 
       userContent = `Current Code:\n${currentCode}\n\nNew Requirement/Change:\n${requirement}`;
@@ -212,13 +217,7 @@ export const streamChatResponse = async (
     if (provider === AIProvider.GOOGLE) {
       await callGeminiChatStream(apiKey, systemInstruction, message, onChunk);
     } else {
-      // DeepSeek doesn't have a specific 'chat' object like Google GenAI SDK, so we treat it as a fresh stream with history managed by client if needed. 
-      // For this simple assistant, we are currently only passing the last user message in the 'message' arg.
-      // To properly support chat history with DeepSeek in this architecture, we would need to pass the full history. 
-      // For now, we will just send the single message to keep it simple, or improved later.
-      // NOTE: The previous Google implementation also only sent `message` without history context in `sendMessageStream` unless `chat` object persisted.
-      // Since `streamGeminiResponse` created a new `chat` instance every time, it didn't strictly maintain history either in the Service layer (though the UI does).
-      // We will emulate the same "stateless" behavior for now.
+      // DeepSeek simple chat stream
       await callDeepSeekStream(apiKey, systemInstruction, message, onChunk);
     }
 
