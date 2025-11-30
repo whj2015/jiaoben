@@ -12,47 +12,47 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView }) => {
   const { t } = useTranslation();
 
   return (
-    <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm flex-shrink-0 z-10">
-      <div className="flex items-center gap-2">
-        <div className="w-6 h-6 bg-purple-600 rounded-md flex items-center justify-center">
-          <span className="text-white font-bold text-xs">GM</span>
+    <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex items-center justify-between">
+      <div className="flex items-center gap-2.5">
+        <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-indigo-200 shadow-md">
+          <span className="text-white font-extrabold text-sm tracking-tighter">EG</span>
         </div>
-        <h1 className="font-semibold text-gray-800 tracking-tight">{t('appTitle')}</h1>
+        <h1 className="font-bold text-slate-800 tracking-tight text-sm">{t('appTitle')}</h1>
       </div>
       
-      <nav className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
+      <nav className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
         <button
           onClick={() => setView(ViewState.LIST)}
-          className={`p-1.5 rounded-md transition-all duration-200 ${
+          className={`flex items-center justify-center w-8 h-8 rounded-md transition-all duration-200 ${
             currentView === ViewState.LIST 
-              ? 'bg-white text-purple-600 shadow-sm' 
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+              ? 'bg-white text-indigo-600 shadow-sm font-medium' 
+              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
           }`}
           title={t('navMyScripts')}
         >
-          <ScrollText size={18} />
+          <ScrollText size={16} strokeWidth={2.5} />
         </button>
         <button
           onClick={() => setView(ViewState.EDITOR)}
-          className={`p-1.5 rounded-md transition-all duration-200 ${
+          className={`flex items-center justify-center w-8 h-8 rounded-md transition-all duration-200 ${
             currentView === ViewState.EDITOR 
-              ? 'bg-white text-purple-600 shadow-sm' 
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+              ? 'bg-white text-indigo-600 shadow-sm font-medium' 
+              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
           }`}
           title={t('navNewScript')}
         >
-          <FileCode2 size={18} />
+          <FileCode2 size={16} strokeWidth={2.5} />
         </button>
         <button
           onClick={() => setView(ViewState.SETTINGS)}
-          className={`p-1.5 rounded-md transition-all duration-200 ${
+          className={`flex items-center justify-center w-8 h-8 rounded-md transition-all duration-200 ${
             currentView === ViewState.SETTINGS 
-              ? 'bg-white text-purple-600 shadow-sm' 
-              : 'text-gray-500 hover:text-gray-700 hover:bg-gray-200'
+              ? 'bg-white text-indigo-600 shadow-sm font-medium' 
+              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
           }`}
           title={t('navSettings')}
         >
-          <Settings size={18} />
+          <Settings size={16} strokeWidth={2.5} />
         </button>
       </nav>
     </header>
