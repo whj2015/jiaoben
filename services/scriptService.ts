@@ -88,8 +88,12 @@ export const saveScript = async (script: UserScript): Promise<void> => {
     
     // 如果代码发生变化，保存历史版本
     if (oldScript.code !== script.code) {
+      // 确保时间戳有效。如果 oldScript.updatedAt 未定义（旧数据），则使用当前时间。
+      // 这表示该历史版本的“结束时间”或“存档时间”是现在。
+      const archiveTimestamp = oldScript.updatedAt || Date.now();
+      
       const historyEntry: ScriptVersion = {
-        timestamp: oldScript.updatedAt || Date.now(),
+        timestamp: archiveTimestamp,
         code: oldScript.code,
         version: oldScript.version
       };

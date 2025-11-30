@@ -42,6 +42,11 @@ const translations = {
     restoreConfirm: 'Are you sure you want to restore this version? Current unsaved changes will be lost.',
     noHistory: 'No history available.',
     version: 'Version',
+    compareChanges: 'Compare Changes',
+    currentCode: 'Current Editor Code',
+    selectedVersion: 'Selected Version',
+    restoreThis: 'Restore This Version',
+    close: 'Close',
     
     // Settings
     settingsTitle: 'Settings',
@@ -100,6 +105,11 @@ const translations = {
     restoreConfirm: '确定要恢复此版本吗？当前未保存的更改将丢失。',
     noHistory: '暂无历史记录。',
     version: '版本',
+    compareChanges: '对比变更',
+    currentCode: '当前编辑器代码',
+    selectedVersion: '选中的历史版本',
+    restoreThis: '恢复此版本',
+    close: '关闭',
     
     settingsTitle: '设置',
     language: '语言',
@@ -156,6 +166,11 @@ const translations = {
     restoreConfirm: 'このバージョンを復元してもよろしいですか？保存されていない変更は失われます。',
     noHistory: '履歴はありません。',
     version: 'バージョン',
+    compareChanges: '変更を比較',
+    currentCode: '現在のコード',
+    selectedVersion: '選択したバージョン',
+    restoreThis: 'このバージョンを復元',
+    close: '閉じる',
     
     settingsTitle: '設定',
     language: '言語',
@@ -212,6 +227,11 @@ const translations = {
     restoreConfirm: '¿Seguro que quieres restaurar esta versión? Se perderán los cambios no guardados.',
     noHistory: 'No hay historial disponible.',
     version: 'Versión',
+    compareChanges: 'Comparar Cambios',
+    currentCode: 'Código Actual',
+    selectedVersion: 'Versión Seleccionada',
+    restoreThis: 'Restaurar esta Versión',
+    close: 'Cerrar',
     
     settingsTitle: 'Ajustes',
     language: 'Idioma',
