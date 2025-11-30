@@ -4,6 +4,33 @@
 // TypeScript 声明，避免 chrome 未定义的错误
 declare var chrome: any;
 
+// 追踪每个标签页激活的脚本数量
+const tabScriptCounts: Record<number, number> = {};
+
+/**
+ * 更新扩展图标上的角标 (Badge)
+ * 显示当前页面运行的脚本数量，背景设为红色
+ */
+function updateBadge(tabId: number) {
+  if (typeof chrome === 'undefined' || !chrome.action) return;
+
+  const count = tabScriptCounts[tabId] || 0;
+
+  if (count > 0) {
+    // 设置文字为脚本数量
+    chrome.action.setBadgeText({ text: count.toString(), tabId });
+    // 设置背景颜色为红色
+    chrome.action.setBadgeBackgroundColor({ color: '#DC2626', tabId });
+    // 设置文字颜色为白色 (部分浏览器支持)
+    if (chrome.action.setBadgeTextColor) {
+      chrome.action.setBadgeTextColor({ color: '#FFFFFF', tabId });
+    }
+  } else {
+    // 清除角标
+    chrome.action.setBadgeText({ text: '', tabId });
+  }
+}
+
 // 简单的 URL 匹配函数 (支持 * 通配符)
 function matchesRule(url: string, rule: string): boolean {
   // 将通配符 * 转换为正则 .*
@@ -13,12 +40,28 @@ function matchesRule(url: string, rule: string): boolean {
   return regex.test(url);
 }
 
-// 监听标签页更新
+// 监听标签页更新 (页面加载完成时注入)
 if (typeof chrome !== 'undefined' && chrome.tabs) {
   chrome.tabs.onUpdated.addListener((tabId: number, changeInfo: any, tab: any) => {
+    // 清除旧状态
+    if (changeInfo.status === 'loading') {
+      tabScriptCounts[tabId] = 0;
+      updateBadge(tabId);
+    }
+    
     if (changeInfo.status === 'complete' && tab.url) {
       checkAndInjectScripts(tabId, tab.url);
     }
+  });
+
+  // 监听标签页切换 (切换时更新角标显示)
+  chrome.tabs.onActivated.addListener((activeInfo: any) => {
+    updateBadge(activeInfo.tabId);
+  });
+
+  // 监听标签页关闭 (清理内存)
+  chrome.tabs.onRemoved.addListener((tabId: number) => {
+    delete tabScriptCounts[tabId];
   });
 }
 
@@ -42,6 +85,10 @@ async function checkAndInjectScripts(tabId: number, url: string) {
       
       return false;
     });
+
+    // 更新当前 Tab 的计数并刷新角标
+    tabScriptCounts[tabId] = matchedScripts.length;
+    updateBadge(tabId);
 
     if (matchedScripts.length > 0) {
       console.log(`[EdgeGenius] Injecting ${matchedScripts.length} scripts into ${url}`);
