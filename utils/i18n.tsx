@@ -24,6 +24,7 @@ const translations = {
     importSuccess: 'Successfully imported {{count}} scripts',
     importError: 'Import failed: ',
     noDescription: 'No description provided',
+    loading: 'Loading...',
 
     // Tab Manager
     openTabs: 'Open Tabs',
@@ -110,6 +111,7 @@ const translations = {
     importSuccess: '成功导入 {{count}} 个脚本',
     importError: '导入失败：',
     noDescription: '暂无描述',
+    loading: '加载中...',
 
     // Tab Manager
     openTabs: '已打开标签页',
@@ -193,6 +195,7 @@ const translations = {
     importSuccess: '{{count}} 件インポート成功',
     importError: '失敗：',
     noDescription: '説明なし',
+    loading: '読み込み中...',
 
     // Tab Manager
     openTabs: '開いているタブ',
@@ -276,6 +279,7 @@ const translations = {
     importSuccess: '{{count}} importados',
     importError: 'Error: ',
     noDescription: 'Sin descripción',
+    loading: 'Cargando...',
 
     // Tab Manager
     openTabs: 'Pestañas abiertas',

@@ -31,7 +31,7 @@ const TabManager: React.FC = () => {
   };
 
   if (loading) {
-    return <div className="p-8 text-center text-gray-400">Loading tabs...</div>;
+    return <div className="p-8 text-center text-gray-400">{t('loading')}</div>;
   }
 
   return (

@@ -1,5 +1,5 @@
 {
-  "name": "EdgeGenius Extension",
-  "description": "一个集成了标签管理、快速笔记和 Gemini AI 助手的现代浏览器扩展原型。",
+  "name": "EdgeGenius - AI 脚本管理器",
+  "description": "一款集成了 Gemini 与 DeepSeek AI 模型的智能 UserScript 管理器。核心功能包括：自动化脚本生成与优化、代码版本控制与差异对比、脚本导入导出及浏览器标签页管理。",
   "requestFramePermissions": []
 }

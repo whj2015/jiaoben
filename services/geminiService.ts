@@ -136,60 +136,60 @@ export const generateScriptWithAI = async (
 
     if (!apiKey) throw new Error("MISSING_API_KEY");
 
-    let systemPrompt = `You are an expert JavaScript developer specializing in UserScripts (Tampermonkey/Violentmonkey).
-    Your task is to write a complete, valid UserScript based on the user's requirement.
+    let systemPrompt = `你是一位精通 UserScript (Tampermonkey/Violentmonkey) 的 JavaScript 开发专家。
+    你的任务是根据用户的需求编写完整、有效的 UserScript。
     
-    CRITICAL RULES:
-    1. **Metadata**: Start with // ==UserScript== block.
-       - Always set @namespace to 'https://www.acgline.org/'
-    2. **Language**: **ALL comments and @description metadata MUST be in CHINESE.**
-    3. **Raw Code**: Return ONLY valid JavaScript. Do NOT use markdown code blocks (\`\`\`).
-    4. **Robustness**: 
-       - Modern websites (SPA, React, Vue) load content asynchronously. 
-       - You MUST NOT assume elements exist immediately on 'document-end'.
-       - Use 'MutationObserver' or 'setInterval' to wait for elements to appear before acting.
-       - Always wrap your logic in try-catch blocks to prevent crashing the page.
-    5. **Safety**: Wrap your code in an IIFE (Immediately Invoked Function Expression) to avoid global namespace pollution.
+    关键规则：
+    1. **元数据**：必须以 // ==UserScript== 代码块开头。
+       - 必须设置 @namespace 为 'https://www.acgline.org/'
+    2. **语言**：**所有的注释和 @description 元数据必须使用中文。**
+    3. **纯代码**：仅返回有效的 JavaScript 代码。不要使用 markdown 代码块 (\`\`\`)。
+    4. **健壮性**：
+       - 现代网站 (SPA, React, Vue) 内容加载是异步的。
+       - **绝对不要**假设元素在 'document-end' 时立即存在。
+       - 必须使用 'MutationObserver' 或 'setInterval' 等待元素出现后再操作。
+       - 始终将逻辑包裹在 try-catch 块中，防止页面崩溃。
+    5. **安全性**：将代码包裹在 IIFE (立即调用函数表达式) 中，避免污染全局命名空间。
     `;
 
     if (contextUrl) {
       systemPrompt += `\n
-      CONTEXT AWARENESS:
-      The user is browsing: ${contextUrl}
-      - Set @match to target this domain (e.g., *://example.com/*).
-      - Write logic specifically for this site's structure.
+      上下文感知：
+      用户正在浏览：${contextUrl}
+      - 设置 @match 以匹配此域名 (例如 *://example.com/*)。
+      - 针对此网站的结构编写逻辑。
       `;
     } else {
-      systemPrompt += `\nInclude smart @match rules based on the requirement.`;
+      systemPrompt += `\n根据需求包含智能的 @match 规则。`;
     }
 
     let userContent = requirement;
 
     // 如果提供了现有代码，切换为更新模式
     if (currentCode) {
-      systemPrompt = `You are an expert UserScript developer.
-      Your task is to MODIFY an existing UserScript to satisfy a new requirement while STRICTLY PRESERVING existing functionality.
+      systemPrompt = `你是一位 UserScript 开发专家。
+      你的任务是修改现有的 UserScript 以满足新的需求，同时严格保留现有功能。
       
-      CRITICAL RULES for UPDATE MODE:
-      1. **NO REGRESSION (Most Important)**: Do NOT remove or break any existing logic unless it directly conflicts with the new requirement. The current code is considered working and valuable.
-      2. **Additive Approach**: Prefer adding new functions, variables, or event listeners over rewriting the entire script structure.
-      3. **Namespace Integrity**: Ensure @namespace remains 'https://www.acgline.org/'.
-      4. **Metadata Preservation**: Keep existing @name, @match, and other metadata unless explicitly asked to change them.
-      5. **Full Output**: Return the COMPLETE updated script code, not just the changes.
-      6. **Format**: Return ONLY valid JavaScript. NO markdown code blocks (\`\`\`).
-      7. **Language**: **Use CHINESE for all comments and explanations within the code.**
-      8. **Robustness**: Ensure both old and new logic handles dynamic DOM loading (SPAs) gracefully.
-      9. **Version Control**: Analyze the changes made. AUTOMATICALLY increment the @version number in the metadata block based on Semantic Versioning:
-         - **Patch** (e.g., 0.1.0 -> 0.1.1): for bug fixes, tweaks, or small adjustments.
-         - **Minor** (e.g., 0.1.0 -> 0.2.0): for new features, new functions, or significant logic changes.
-         - **Major** (e.g., 1.0.0 -> 2.0.0): for complete rewrites or breaking changes.
+      更新模式的关键规则：
+      1. **禁止回退 (最重要)**：除非与新需求直接冲突，否则**绝对不要**删除或破坏现有的逻辑。当前代码被认为是有效且有价值的。
+      2. **增量式方法**：优先添加新函数、变量或事件监听器，而不是重写整个脚本结构。
+      3. **命名空间完整性**：确保 @namespace 保持为 'https://www.acgline.org/'。
+      4. **元数据保留**：除非明确要求更改，否则保留现有的 @name, @match 和其他元数据。
+      5. **完整输出**：返回**完整的**更新后脚本代码，而不仅仅是修改部分。
+      6. **格式**：仅返回有效的 JavaScript。不要使用 markdown 代码块 (\`\`\`)。
+      7. **语言**：**代码中的所有注释和解释必须使用中文。**
+      8. **健壮性**：确保新旧逻辑都能优雅地处理动态 DOM 加载 (SPA)。
+      9. **版本控制**：分析所做的更改。根据语义化版本控制自动增加元数据块中的 @version 号：
+         - **补丁 (Patch)** (例如 0.1.0 -> 0.1.1): 用于错误修复、微调或小调整。
+         - **次要 (Minor)** (例如 0.1.0 -> 0.2.0): 用于新功能、新函数或重大逻辑更改。
+         - **主要 (Major)** (例如 1.0.0 -> 2.0.0): 用于完全重写或破坏性更改。
       `;
 
       if (contextUrl) {
-        systemPrompt += `\nContext URL: ${contextUrl} (Use this to verify logic against current site)`;
+        systemPrompt += `\n上下文 URL: ${contextUrl} (使用此 URL 验证逻辑是否符合当前站点)`;
       }
 
-      userContent = `ORIGINAL CODE:\n${currentCode}\n\nNEW REQUIREMENT:\n${requirement}\n\nINSTRUCTION:\nApply the new requirement to the ORIGINAL CODE without losing existing features. Update the @version appropriately. Return the full updated code.`;
+      userContent = `原始代码：\n${currentCode}\n\n新需求：\n${requirement}\n\n指令：\n将新需求应用于原始代码，且不丢失现有功能。适当更新 @version。返回完整的更新后代码。`;
     }
 
     if (provider === AIProvider.GOOGLE) {
