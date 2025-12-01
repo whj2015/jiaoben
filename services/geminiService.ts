@@ -167,22 +167,23 @@ export const generateScriptWithAI = async (
     // 如果提供了现有代码，切换为更新模式
     if (currentCode) {
       systemPrompt = `You are an expert UserScript developer.
-      Your task is to UPDATE or REFACTOR an existing UserScript based on the user's new requirement.
+      Your task is to MODIFY an existing UserScript to satisfy a new requirement while STRICTLY PRESERVING existing functionality.
       
-      Rules:
-      1. Keep the existing metadata unless the requirement specifically changes it.
-      2. Ensure @namespace is set to 'https://www.acgline.org/'.
-      3. Preserve existing functionality if it doesn't conflict with the new requirement.
-      4. Return the FULL updated script code (not just the diff).
-      5. Do NOT use markdown code blocks (\`\`\`).
-      6. Ensure the code handles dynamic DOM loading (SPAs) gracefully.
+      CRITICAL RULES for UPDATE MODE:
+      1. **NO REGRESSION (Most Important)**: Do NOT remove or break any existing logic unless it directly conflicts with the new requirement. The current code is considered working and valuable.
+      2. **Additive Approach**: Prefer adding new functions, variables, or event listeners over rewriting the entire script structure.
+      3. **Namespace Integrity**: Ensure @namespace remains 'https://www.acgline.org/'.
+      4. **Metadata Preservation**: Keep existing @name, @match, and other metadata unless explicitly asked to change them.
+      5. **Full Output**: Return the COMPLETE updated script code, not just the changes.
+      6. **Format**: Return ONLY valid JavaScript. NO markdown code blocks (\`\`\`).
+      7. **Robustness**: Ensure both old and new logic handles dynamic DOM loading (SPAs) gracefully.
       `;
 
       if (contextUrl) {
         systemPrompt += `\nContext URL: ${contextUrl} (Use this to verify logic against current site)`;
       }
 
-      userContent = `Current Code:\n${currentCode}\n\nNew Requirement/Change:\n${requirement}`;
+      userContent = `ORIGINAL CODE:\n${currentCode}\n\nNEW REQUIREMENT:\n${requirement}\n\nINSTRUCTION:\nApply the new requirement to the ORIGINAL CODE without losing existing features. Return the full updated code.`;
     }
 
     if (provider === AIProvider.GOOGLE) {
