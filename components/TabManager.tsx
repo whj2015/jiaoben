@@ -2,10 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { TabInfo } from '../types';
 import { getTabs, activateTab, closeTab } from '../services/extensionService';
 import { X, ExternalLink, Globe } from 'lucide-react';
+import { useTranslation } from '../utils/i18n';
 
 const TabManager: React.FC = () => {
   const [tabs, setTabs] = useState<TabInfo[]>([]);
   const [loading, setLoading] = useState(true);
+  const { t } = useTranslation();
 
   const fetchTabs = async () => {
     setLoading(true);
@@ -35,12 +37,12 @@ const TabManager: React.FC = () => {
   return (
     <div className="flex flex-col h-full overflow-hidden bg-gray-50">
       <div className="p-3 border-b border-gray-200 bg-white flex justify-between items-center">
-        <h2 className="text-sm font-semibold text-gray-700">Open Tabs ({tabs.length})</h2>
+        <h2 className="text-sm font-semibold text-gray-700">{t('openTabs')} ({tabs.length})</h2>
         <button 
           onClick={fetchTabs} 
           className="text-xs text-blue-600 hover:underline"
         >
-          Refresh
+          {t('refresh')}
         </button>
       </div>
       
@@ -73,7 +75,7 @@ const TabManager: React.FC = () => {
             <button
               onClick={(e) => handleClose(e, tab.id)}
               className="opacity-0 group-hover:opacity-100 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
-              title="Close Tab"
+              title={t('closeTab')}
             >
               <X size={16} />
             </button>
@@ -82,7 +84,7 @@ const TabManager: React.FC = () => {
         
         {tabs.length === 0 && (
             <div className="text-center py-10 text-gray-400">
-                No active tabs found.
+                {t('noActiveTabs')}
             </div>
         )}
       </div>

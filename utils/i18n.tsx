@@ -23,6 +23,12 @@ const translations = {
     dragDropTip: 'Drag & Drop .js or .json files here',
     importSuccess: 'Successfully imported {{count}} scripts',
     importError: 'Import failed: ',
+    noDescription: 'No description provided',
+
+    // Tab Manager
+    openTabs: 'Open Tabs',
+    noActiveTabs: 'No active tabs found.',
+    closeTab: 'Close Tab',
 
     // Editor
     editorEdit: 'Edit Script',
@@ -39,6 +45,7 @@ const translations = {
     context: 'Context',
     globalContext: 'Global',
     exportScript: 'Export File',
+    untitledScript: 'Untitled Script',
     
     // History
     history: 'History',
@@ -102,6 +109,12 @@ const translations = {
     dragDropTip: '拖拽 .js 或 .json 文件到此处',
     importSuccess: '成功导入 {{count}} 个脚本',
     importError: '导入失败：',
+    noDescription: '暂无描述',
+
+    // Tab Manager
+    openTabs: '已打开标签页',
+    noActiveTabs: '未找到活动标签页',
+    closeTab: '关闭标签页',
 
     editorEdit: '编辑脚本',
     editorNew: '新建脚本',
@@ -117,6 +130,7 @@ const translations = {
     context: '上下文',
     globalContext: '全局',
     exportScript: '导出文件',
+    untitledScript: '无标题脚本',
     
     history: '历史记录',
     viewHistory: '版本历史',
@@ -178,6 +192,12 @@ const translations = {
     dragDropTip: '.js または .json をドロップ',
     importSuccess: '{{count}} 件インポート成功',
     importError: '失敗：',
+    noDescription: '説明なし',
+
+    // Tab Manager
+    openTabs: '開いているタブ',
+    noActiveTabs: 'アクティブなタブが見つかりません',
+    closeTab: 'タブを閉じる',
 
     editorEdit: '編集',
     editorNew: '新規',
@@ -193,6 +213,7 @@ const translations = {
     context: '状況',
     globalContext: '全体',
     exportScript: 'エクスポート',
+    untitledScript: '無題のスクリプト',
     
     history: '履歴',
     viewHistory: 'バージョン',
@@ -254,6 +275,12 @@ const translations = {
     dragDropTip: 'Arrastra archivos .js o .json',
     importSuccess: '{{count}} importados',
     importError: 'Error: ',
+    noDescription: 'Sin descripción',
+
+    // Tab Manager
+    openTabs: 'Pestañas abiertas',
+    noActiveTabs: 'No se encontraron pestañas activas',
+    closeTab: 'Cerrar pestaña',
 
     editorEdit: 'Editar',
     editorNew: 'Nuevo',
@@ -269,6 +296,7 @@ const translations = {
     context: 'Contexto',
     globalContext: 'Global',
     exportScript: 'Exportar',
+    untitledScript: 'Script sin título',
     
     history: 'Historial',
     viewHistory: 'Versiones',

@@ -4,12 +4,12 @@ declare var chrome: any;
 
 const isExtensionEnv = typeof chrome !== 'undefined' && !!chrome.storage;
 
-// 默认脚本模板
+// 默认脚本模板 (中文版)
 export const DEFAULT_SCRIPT_TEMPLATE = `// ==UserScript==
-// @name         New Script
+// @name         新脚本
 // @namespace    https://www.acgline.org/
 // @version      0.1
-// @description  try to take over the world!
+// @description  尝试接管世界！
 // @author       You
 // @match        *://*/*
 // @grant        none
@@ -18,8 +18,8 @@ export const DEFAULT_SCRIPT_TEMPLATE = `// ==UserScript==
 (function() {
     'use strict';
 
-    console.log('EdgeGenius Script Running...');
-    // Your code here...
+    console.log('EdgeGenius 脚本正在运行...');
+    // 在此处编写代码...
 })();`;
 
 /**
@@ -27,7 +27,7 @@ export const DEFAULT_SCRIPT_TEMPLATE = `// ==UserScript==
  */
 export const parseMetadata = (code: string): ScriptMetadata => {
   const metadata: ScriptMetadata = {
-    name: 'Untitled Script',
+    name: '无标题脚本',
     match: [],
     exclude: []
   };
@@ -201,7 +201,7 @@ export const createScriptFromCode = (code: string, id?: string): UserScript => {
   const meta = parseMetadata(code);
   return {
     id: id || Date.now().toString(),
-    name: meta.name || 'Imported Script',
+    name: meta.name || '无标题脚本',
     description: meta.description || '',
     version: meta.version || '0.1',
     match: meta.match.length > 0 ? meta.match : ['*://*/*'],

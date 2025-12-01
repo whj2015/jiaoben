@@ -137,7 +137,7 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
                     <h3 className="text-sm font-bold text-slate-800 truncate" title={script.name}>{script.name}</h3>
                     <span className="bg-slate-100 text-slate-500 text-[10px] px-1.5 py-0.5 rounded font-mono">v{script.version}</span>
                   </div>
-                  <p className="text-xs text-slate-500 truncate">{script.description || 'No description provided'}</p>
+                  <p className="text-xs text-slate-500 truncate">{script.description || t('noDescription')}</p>
                 </div>
                 <button 
                   onClick={() => handleToggle(script.id, script.enabled)}

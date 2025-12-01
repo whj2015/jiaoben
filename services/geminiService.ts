@@ -142,13 +142,14 @@ export const generateScriptWithAI = async (
     CRITICAL RULES:
     1. **Metadata**: Start with // ==UserScript== block.
        - Always set @namespace to 'https://www.acgline.org/'
-    2. **Raw Code**: Return ONLY valid JavaScript. Do NOT use markdown code blocks (\`\`\`).
-    3. **Robustness**: 
+    2. **Language**: **ALL comments and @description metadata MUST be in CHINESE.**
+    3. **Raw Code**: Return ONLY valid JavaScript. Do NOT use markdown code blocks (\`\`\`).
+    4. **Robustness**: 
        - Modern websites (SPA, React, Vue) load content asynchronously. 
        - You MUST NOT assume elements exist immediately on 'document-end'.
        - Use 'MutationObserver' or 'setInterval' to wait for elements to appear before acting.
        - Always wrap your logic in try-catch blocks to prevent crashing the page.
-    4. **Safety**: Wrap your code in an IIFE (Immediately Invoked Function Expression) to avoid global namespace pollution.
+    5. **Safety**: Wrap your code in an IIFE (Immediately Invoked Function Expression) to avoid global namespace pollution.
     `;
 
     if (contextUrl) {
@@ -176,8 +177,9 @@ export const generateScriptWithAI = async (
       4. **Metadata Preservation**: Keep existing @name, @match, and other metadata unless explicitly asked to change them.
       5. **Full Output**: Return the COMPLETE updated script code, not just the changes.
       6. **Format**: Return ONLY valid JavaScript. NO markdown code blocks (\`\`\`).
-      7. **Robustness**: Ensure both old and new logic handles dynamic DOM loading (SPAs) gracefully.
-      8. **Version Control**: Analyze the changes made. AUTOMATICALLY increment the @version number in the metadata block based on Semantic Versioning:
+      7. **Language**: **Use CHINESE for all comments and explanations within the code.**
+      8. **Robustness**: Ensure both old and new logic handles dynamic DOM loading (SPAs) gracefully.
+      9. **Version Control**: Analyze the changes made. AUTOMATICALLY increment the @version number in the metadata block based on Semantic Versioning:
          - **Patch** (e.g., 0.1.0 -> 0.1.1): for bug fixes, tweaks, or small adjustments.
          - **Minor** (e.g., 0.1.0 -> 0.2.0): for new features, new functions, or significant logic changes.
          - **Major** (e.g., 1.0.0 -> 2.0.0): for complete rewrites or breaking changes.
@@ -219,7 +221,7 @@ export const streamChatResponse = async (
 
     if (!apiKey) throw new Error("MISSING_API_KEY");
 
-    const systemInstruction = "You are a helpful AI assistant inside a browser extension manager. Help the user with web browsing tasks, summarizing content, or explaining scripts.";
+    const systemInstruction = "你是一个浏览器扩展管理器中的智能 AI 助手。请使用中文协助用户完成网页浏览任务、总结内容、解释脚本代码或回答技术问题。";
 
     if (provider === AIProvider.GOOGLE) {
       await callGeminiChatStream(apiKey, systemInstruction, message, onChunk);
