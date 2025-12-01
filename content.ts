@@ -41,22 +41,26 @@ function injectScriptWithSandbox(script: any) {
   const storageSnapshot = script.storage || {};
   const requires = script.requiresContent || {};
 
+  // Securely serialize values to avoid syntax errors with backticks/newlines in user code
+  const safeScriptId = JSON.stringify(scriptId);
+  const safeStorage = JSON.stringify(storageSnapshot);
+  const safeMetadata = JSON.stringify(script.metadata);
+  const safeCode = JSON.stringify(script.code);
+  const safeRequires = JSON.stringify(Object.values(requires).join('\n;\n'));
+
   // Construct the Sandbox Code
-  // We serialize the storage snapshot so GM_getValue is synchronous
   const sandboxCode = `
   (function() {
-    const scriptId = "${scriptId}";
-    const storageSnapshot = ${JSON.stringify(storageSnapshot)};
+    const scriptId = ${safeScriptId};
+    const storageSnapshot = ${safeStorage};
+    const meta = ${safeMetadata};
     
     // --- GM API Implementation (Main World) ---
     
     const GM_info = {
-      script: {
-        name: "${script.metadata.name}",
-        version: "${script.metadata.version}",
-        description: "${script.metadata.description}",
-        namespace: "${script.metadata.namespace}"
-      }
+      script: meta,
+      scriptHandler: "EdgeGenius",
+      version: "3.0.0"
     };
 
     // Helper: Call Background via Content Script Bridge
@@ -78,58 +82,84 @@ function injectScriptWithSandbox(script: any) {
     }
 
     // Storage: Read from snapshot, Write to Bridge + Update Snapshot
-    function GM_getValue(key, def) {
+    const GM_getValue = function(key, def) {
       return Object.prototype.hasOwnProperty.call(storageSnapshot, key) ? storageSnapshot[key] : def;
-    }
+    };
     
-    function GM_setValue(key, value) {
+    const GM_setValue = function(key, value) {
       storageSnapshot[key] = value; // Optimistic update
       callBridge('GM_setValue', [key, value]);
-    }
+    };
 
-    function GM_deleteValue(key) {
+    const GM_deleteValue = function(key) {
       delete storageSnapshot[key];
       callBridge('GM_deleteValue', [key]);
-    }
+    };
     
-    function GM_listValues() {
+    const GM_listValues = function() {
       return Object.keys(storageSnapshot);
-    }
+    };
 
     // XHR
-    function GM_xmlhttpRequest(details) {
+    const GM_xmlhttpRequest = function(details) {
       callBridge('GM_xmlhttpRequest', [details]).then(resp => {
         if (details.onload) details.onload(resp);
       }).catch(err => {
         if (details.onerror) details.onerror({ error: err });
       });
-    }
+    };
 
     // Notification
-    function GM_notification(text, title, image, onclick) {
+    const GM_notification = function(text, title, image, onclick) {
       if (typeof text === 'object') {
         callBridge('GM_notification', [text]); // details object
       } else {
         callBridge('GM_notification', [{ text, title, image }]);
       }
-    }
+    };
     
-    function GM_setClipboard(data, info) {
+    const GM_setClipboard = function(data, info) {
       callBridge('GM_setClipboard', [data, info]);
-    }
+    };
     
-    function GM_log(message) {
-      console.log("[GM:${script.metadata.name}]", message);
+    const GM_log = function(message) {
+      console.log("[GM:" + meta.name + "]", message);
+    };
+
+    // Define window.GM for V4 compatibility
+    window.GM = {
+       info: GM_info,
+       xmlHttpRequest: GM_xmlhttpRequest,
+       setValue: GM_setValue,
+       getValue: GM_getValue,
+       deleteValue: GM_deleteValue,
+       listValues: GM_listValues,
+       notification: GM_notification,
+       setClipboard: GM_setClipboard
+    };
+
+    // --- Execute Logic ---
+    
+    // 1. Inject @require libs
+    const requiresCode = ${safeRequires};
+    if (requiresCode) {
+       try {
+         // Execute requires in the global scope (of this IIFE/Window)
+         (new Function(requiresCode))();
+       } catch(e) { console.error("[EdgeGenius] Error loading @require:", e); }
     }
 
-    // --- Inject @require libs ---
-    ${Object.values(requires).join('\n;')}
-
-    // --- User Script ---
+    // 2. Inject User Script
+    const userCode = ${safeCode};
     try {
-      (function(GM_info, GM_getValue, GM_setValue, GM_deleteValue, GM_listValues, GM_xmlhttpRequest, GM_notification, GM_setClipboard, GM_log) {
-         ${script.code}
-      })(GM_info, GM_getValue, GM_setValue, GM_deleteValue, GM_listValues, GM_xmlhttpRequest, GM_notification, GM_setClipboard, GM_log);
+      // Create a function that takes the GM APIs as arguments
+      // This mimics the sandbox environment where these are available globally
+      const apiNames = ["GM_info", "GM_getValue", "GM_setValue", "GM_deleteValue", "GM_listValues", "GM_xmlhttpRequest", "GM_notification", "GM_setClipboard", "GM_log"];
+      const apiValues = [GM_info, GM_getValue, GM_setValue, GM_deleteValue, GM_listValues, GM_xmlhttpRequest, GM_notification, GM_setClipboard, GM_log];
+      
+      // new Function(arg1, arg2, ..., body)
+      const fn = new Function(...apiNames, userCode);
+      fn.apply(window, apiValues);
     } catch(e) {
       console.error("[EdgeGenius] Script Error:", e);
     }

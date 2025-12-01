@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserScript, ScriptVersion } from '../types';
 import { DEFAULT_SCRIPT_TEMPLATE, saveScript, createScriptFromCode, deleteScriptVersion, exportScriptFile } from '../services/scriptService';
-import { generateScriptWithAI } from '../services/geminiService';
+import { generateScriptWithAI, cleanMarkdown } from '../services/geminiService';
 import { getActiveTabInfo } from '../services/extensionService';
 import { Save, Sparkles, AlertCircle, ArrowLeft, RefreshCw, Link2, History, RotateCcw, X, Clock, Split, Trash2, Download } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
@@ -98,7 +98,7 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
   const [code, setCode] = useState(DEFAULT_SCRIPT_TEMPLATE);
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isSaving, setIsSaving] = useState(false); // Add saving state
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [contextUrl, setContextUrl] = useState<string>('');
   
@@ -162,9 +162,14 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
     try {
       await generateScriptWithAI(prompt, (chunk) => {
         newCode += chunk;
-        if (newCode.length > 20) setCode(newCode);
+        // Strip Markdown live
+        setCode(cleanMarkdown(newCode));
       }, isUpdateMode ? code : undefined, contextUrl);
-      if (newCode) setCode(newCode);
+      
+      // Final cleanup
+      if (newCode) {
+        setCode(cleanMarkdown(newCode));
+      }
     } catch (err: any) {
       setError(err.message === 'MISSING_API_KEY' ? t('apiKeyMissing') : t('aiError'));
     } finally {
