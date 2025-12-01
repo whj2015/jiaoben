@@ -63,6 +63,40 @@ if (typeof chrome !== 'undefined' && chrome.tabs) {
   chrome.tabs.onRemoved.addListener((tabId: number) => {
     delete tabScriptCounts[tabId];
   });
+
+  // 监听来自 Content Script 的消息 (处理 GM_xmlhttpRequest)
+  chrome.runtime.onMessage.addListener((message: any, sender: any, sendResponse: any) => {
+    if (message.type === 'GM_XHR') {
+      const { method, url, headers, data } = message.payload;
+      
+      // 在 Background 执行 fetch，拥有跨域权限
+      fetch(url, {
+        method: method || 'GET',
+        headers: headers,
+        body: ['GET', 'HEAD'].includes((method || 'GET').toUpperCase()) ? undefined : data
+      })
+      .then(async (res) => {
+        const text = await res.text();
+        // 简单处理 headers
+        const responseHeaders = Array.from(res.headers.entries())
+          .map(([k, v]) => `${k}: ${v}`)
+          .join('\r\n');
+
+        sendResponse({
+          status: res.status,
+          statusText: res.statusText,
+          responseHeaders: responseHeaders,
+          responseText: text,
+          finalUrl: res.url
+        });
+      })
+      .catch(err => {
+        sendResponse({ error: err.message });
+      });
+      
+      return true; // 保持通道开启以进行异步响应
+    }
+  });
 }
 
 async function checkAndInjectScripts(tabId: number, url: string) {
@@ -107,8 +141,8 @@ function injectScript(tabId: number, script: any) {
   chrome.scripting.executeScript({
     target: { tabId: tabId },
     func: (name: string, version: string, description: string, userCode: string) => {
-       // 在页面上下文中构建执行环境
-       // 1. 定义简单的 GM_info 和 GM_log
+       // --- 1. 定义 GM API 环境 ---
+       
        (window as any).GM_info = {
          script: { name, version, description }
        };
@@ -116,8 +150,7 @@ function injectScript(tabId: number, script: any) {
        const logPrefix = `[GM:${name}]`;
        const safeLog = (msg: any) => console.log(logPrefix, msg);
 
-       // 2. 简单的存储模拟 (基于 localStorage)
-       // 注意：这是运行在页面上下文的，真实的扩展通常通过 postMessage 和 background 通信
+       // 简单的存储模拟 (基于 localStorage)
        const storagePrefix = `GM_${name}_`;
        (window as any).GM_setValue = (key: string, value: any) => {
          try {
@@ -129,12 +162,74 @@ function injectScript(tabId: number, script: any) {
        };
        (window as any).GM_log = safeLog;
 
-       // 3. 构建并插入 Script 标签
-       // 这是最安全的方法，将代码作为文本节点插入，避免了 eval 或特殊的转义问题
+       // GM_xmlhttpRequest 实现 (通过 CustomEvent -> Content Script -> Background)
+       (window as any).GM_xmlhttpRequest = (details: any) => {
+          const requestId = 'gm_xhr_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+          
+          // 响应处理器
+          const handler = (event: any) => {
+             const { requestId: respId, error, ...response } = event.detail;
+             if (respId !== requestId) return;
+             
+             window.removeEventListener('EG_GM_xhr_response', handler);
+             
+             if (error) {
+               if (details.onerror) details.onerror({ error });
+             } else {
+               // 构造符合 GM 标准的响应对象
+               const respObj = {
+                 finalUrl: response.finalUrl,
+                 readyState: 4,
+                 status: response.status,
+                 statusText: response.statusText,
+                 responseHeaders: response.responseHeaders,
+                 responseText: response.responseText,
+                 response: response.responseText,
+                 context: details.context
+               };
+               if (details.onload) details.onload(respObj);
+             }
+          };
+
+          window.addEventListener('EG_GM_xhr_response', handler);
+
+          // 发送请求事件
+          window.dispatchEvent(new CustomEvent('EG_GM_xhr_request', {
+             detail: {
+               requestId,
+               method: details.method,
+               url: details.url,
+               headers: details.headers,
+               data: details.data,
+               binary: details.binary
+             }
+          }));
+
+          return {
+             abort: () => { 
+                // 简化版暂不支持 abort
+                window.removeEventListener('EG_GM_xhr_response', handler);
+             }
+          };
+       };
+
+       // 兼容 GM.xmlHttpRequest (Promise 风格)
+       (window as any).GM = (window as any).GM || {};
+       (window as any).GM.xmlHttpRequest = (details: any) => {
+          return new Promise((resolve, reject) => {
+             (window as any).GM_xmlhttpRequest({
+                ...details,
+                onload: resolve,
+                onerror: reject
+             });
+          });
+       };
+
+       // --- 2. 注入并执行用户脚本 ---
+       
        try {
          const scriptEl = document.createElement('script');
          // 将用户代码包裹在 IIFE 中，并加上 try-catch
-         // 我们使用 textContent 赋值，不需要对 userCode 进行 JSON.stringify 转义，浏览器会处理
          scriptEl.textContent = `
            (function() {
              try {
@@ -152,6 +247,6 @@ function injectScript(tabId: number, script: any) {
        }
     },
     args: [script.name, script.version, script.description || '', script.code],
-    world: 'MAIN', // 在主世界执行，以便访问 window 对象和页面 DOM
+    world: 'MAIN', // 在主世界执行
   });
 }

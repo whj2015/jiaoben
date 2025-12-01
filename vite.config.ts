@@ -26,7 +26,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         popup: path.resolve(__dirname, 'index.html'),
-        background: path.resolve(__dirname, 'background.ts') // 增加后台脚本入口
+        background: path.resolve(__dirname, 'background.ts'),
+        content: path.resolve(__dirname, 'content.ts') // 新增 Content Script 入口
       },
       output: {
         entryFileNames: 'assets/[name].js',
