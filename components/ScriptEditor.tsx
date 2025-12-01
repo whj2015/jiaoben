@@ -13,7 +13,6 @@ interface ScriptEditorProps {
   onCancel: () => void;
 }
 
-// Helper
 const formatTime = (ts: number) => {
   if (!ts) return "--/--";
   return new Date(ts).toLocaleString(undefined, {
@@ -21,7 +20,6 @@ const formatTime = (ts: number) => {
   });
 };
 
-// --- Modal Component for Diff View ---
 const HistoryDiffModal: React.FC<{
   version: ScriptVersion;
   currentCode: string;
@@ -100,6 +98,7 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
   const [code, setCode] = useState(DEFAULT_SCRIPT_TEMPLATE);
   const [prompt, setPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isSaving, setIsSaving] = useState(false); // Add saving state
   const [error, setError] = useState<string | null>(null);
   const [contextUrl, setContextUrl] = useState<string>('');
   
@@ -115,12 +114,24 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
   }, [initialScript]);
 
   const handleSave = async () => {
+    setIsSaving(true);
+    setError(null);
     try {
       const script = createScriptFromCode(code, initialScript?.id);
-      if (initialScript?.history) script.history = initialScript.history;
+      // Preserve history and storage
+      if (initialScript) {
+        script.history = initialScript.history;
+        script.storage = initialScript.storage;
+      }
+      
+      // Async save (might fetch dependencies)
       await saveScript(script);
       onSave();
-    } catch (e) { setError(t('failedToSave')); }
+    } catch (e: any) { 
+      setError(t('failedToSave') + ': ' + e.message); 
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleRestore = () => {
@@ -189,8 +200,13 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
                </button>
              </>
           )}
-          <button onClick={handleSave} className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-700 shadow-sm shadow-indigo-200 transition-all flex items-center gap-1.5">
-            <Save size={14} /> {t('save')}
+          <button 
+            onClick={handleSave} 
+            disabled={isSaving}
+            className={`bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-700 shadow-sm shadow-indigo-200 transition-all flex items-center gap-1.5 ${isSaving ? 'opacity-70 cursor-wait' : ''}`}
+          >
+            {isSaving ? <RefreshCw size={14} className="animate-spin" /> : <Save size={14} />} 
+            {t('save')}
           </button>
         </div>
       </div>
