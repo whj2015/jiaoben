@@ -141,6 +141,7 @@ export const generateScriptWithAI = async (
     
     CRITICAL RULES:
     1. **Metadata**: Start with // ==UserScript== block.
+       - Always set @namespace to 'https://www.acgline.org/'
     2. **Raw Code**: Return ONLY valid JavaScript. Do NOT use markdown code blocks (\`\`\`).
     3. **Robustness**: 
        - Modern websites (SPA, React, Vue) load content asynchronously. 
@@ -170,10 +171,11 @@ export const generateScriptWithAI = async (
       
       Rules:
       1. Keep the existing metadata unless the requirement specifically changes it.
-      2. Preserve existing functionality if it doesn't conflict with the new requirement.
-      3. Return the FULL updated script code (not just the diff).
-      4. Do NOT use markdown code blocks (\`\`\`).
-      5. Ensure the code handles dynamic DOM loading (SPAs) gracefully.
+      2. Ensure @namespace is set to 'https://www.acgline.org/'.
+      3. Preserve existing functionality if it doesn't conflict with the new requirement.
+      4. Return the FULL updated script code (not just the diff).
+      5. Do NOT use markdown code blocks (\`\`\`).
+      6. Ensure the code handles dynamic DOM loading (SPAs) gracefully.
       `;
 
       if (contextUrl) {
