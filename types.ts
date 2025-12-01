@@ -1,38 +1,15 @@
 export interface UserScript {
   id: string;
-  metadata: ScriptMetadata;
-  code: string;
-  enabled: boolean;
-  updatedAt: number;
-  history?: ScriptVersion[];
-  storage?: Record<string, any>; // Local storage for GM_setValue
-  requiresContent?: Record<string, string>; // Cached @require content
-
-  // Flattened metadata fields for easy access
   name: string;
   description: string;
   version: string;
-  match: string[];
-  exclude: string[];
-  runAt: 'document-start' | 'document-end' | 'document-idle' | 'context-menu';
-}
-
-export interface ScriptMetadata {
-  name: string;
-  namespace?: string;
-  version?: string;
-  description?: string;
-  author?: string;
-  match: string[];
-  exclude: string[];
-  include: string[];
-  grant: string[];
-  require: string[];
-  resource: { name: string; url: string }[];
-  runAt: 'document-start' | 'document-end' | 'document-idle' | 'context-menu';
-  noframes?: boolean;
-  connect: string[];
-  icon?: string;
+  match: string[]; // @match 规则
+  exclude: string[]; // @exclude 规则
+  code: string;
+  enabled: boolean;
+  runAt: 'document-start' | 'document-end' | 'document-idle';
+  updatedAt: number;
+  history?: ScriptVersion[]; // 历史版本记录
 }
 
 export interface ScriptVersion {
@@ -59,6 +36,17 @@ export enum AIProvider {
   DEEPSEEK = 'DEEPSEEK'
 }
 
+export interface ScriptMetadata {
+  name: string;
+  namespace?: string;
+  version?: string;
+  description?: string;
+  author?: string;
+  match: string[];
+  exclude: string[];
+  runAt?: string;
+}
+
 export interface TabInfo {
   id: number;
   title: string;
@@ -72,22 +60,4 @@ export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
   isLoading?: boolean;
-}
-
-// Messaging Types
-export type GM_Action = 'GM_xmlhttpRequest' | 'GM_setValue' | 'GM_getValue' | 'GM_deleteValue' | 'GM_listValues' | 'GM_notification' | 'GM_setClipboard' | 'GM_download';
-
-export interface GM_Request {
-  type: 'GM_API_CALL';
-  scriptId: string;
-  action: GM_Action;
-  args: any[];
-  requestId?: string;
-}
-
-export interface GM_Response {
-  success: boolean;
-  data?: any;
-  error?: string;
-  requestId?: string;
 }

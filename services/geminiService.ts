@@ -2,14 +2,6 @@ import { GoogleGenAI } from "@google/genai";
 import { getStoredApiKey, getStoredDeepSeekKey, getStoredAIProvider } from "./scriptService";
 import { AIProvider } from "../types";
 
-// --- Helper to clean markdown ---
-export const cleanMarkdown = (text: string): string => {
-  return text.replace(/^```javascript\s*/i, '')
-             .replace(/^```\s*/i, '')
-             .replace(/```$/i, '')
-             .trim();
-};
-
 // --- Google Gemini Implementation ---
 const callGeminiStream = async (
   apiKey: string,
@@ -149,7 +141,7 @@ export const generateScriptWithAI = async (
     
     CRITICAL RULES:
     1. **Metadata**: Start with // ==UserScript== block.
-    2. **Raw Code**: Return ONLY valid JavaScript. Do NOT use markdown code blocks (\`\`\`). Do NOT wrap the code in markdown.
+    2. **Raw Code**: Return ONLY valid JavaScript. Do NOT use markdown code blocks (\`\`\`).
     3. **Robustness**: 
        - Modern websites (SPA, React, Vue) load content asynchronously. 
        - You MUST NOT assume elements exist immediately on 'document-end'.
@@ -180,7 +172,7 @@ export const generateScriptWithAI = async (
       1. Keep the existing metadata unless the requirement specifically changes it.
       2. Preserve existing functionality if it doesn't conflict with the new requirement.
       3. Return the FULL updated script code (not just the diff).
-      4. Do NOT use markdown code blocks (\`\`\`). Do NOT wrap in markdown.
+      4. Do NOT use markdown code blocks (\`\`\`).
       5. Ensure the code handles dynamic DOM loading (SPAs) gracefully.
       `;
 
