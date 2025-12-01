@@ -3,7 +3,7 @@ import { UserScript, ScriptVersion } from '../types';
 import { DEFAULT_SCRIPT_TEMPLATE, saveScript, createScriptFromCode, deleteScriptVersion, exportScriptFile } from '../services/scriptService';
 import { generateScriptWithAI } from '../services/geminiService';
 import { getActiveTabInfo } from '../services/extensionService';
-import { Save, Sparkles, AlertCircle, ArrowLeft, RefreshCw, Link2, History, RotateCcw, X, Clock, Split, Trash2, Download } from 'lucide-react';
+import { Save, Sparkles, AlertCircle, ArrowLeft, RefreshCw, Link2, History, RotateCcw, X, Clock, Split, Trash2, Download, Check } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
 import { diffLines, processDiffWithContext } from '../utils/simpleDiff';
 
@@ -102,6 +102,11 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [contextUrl, setContextUrl] = useState<string>('');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
+  
+  // Track the ID locally. If we start as "New Script", initialScript is null.
+  // Once we save (manually or auto), we generate an ID and stick to it to avoid duplicates.
+  const [localScriptId, setLocalScriptId] = useState<string | undefined>(initialScript?.id);
   
   const [showHistory, setShowHistory] = useState(false);
   const [viewingVersion, setViewingVersion] = useState<ScriptVersion | null>(null);
@@ -110,17 +115,48 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
   const { t } = useTranslation();
 
   useEffect(() => {
-    if (initialScript) setCode(initialScript.code);
+    if (initialScript) {
+      setCode(initialScript.code);
+      setLocalScriptId(initialScript.id);
+    }
     getActiveTabInfo().then(tab => { if (tab?.url) setContextUrl(tab.url); });
   }, [initialScript]);
 
-  const handleSave = async () => {
+  // Unified save function that can be used by the button or auto-save
+  const performInternalSave = async (codeToSave: string) => {
     try {
-      const script = createScriptFromCode(code, initialScript?.id);
-      if (initialScript?.history) script.history = initialScript.history;
+      const script = createScriptFromCode(codeToSave, localScriptId);
+      
+      // Update local ID state if this was a new script
+      if (!localScriptId) {
+        setLocalScriptId(script.id);
+      }
+
+      // Preserve history if we are editing an existing script
+      if (initialScript?.history && initialScript.id === script.id) {
+        script.history = initialScript.history;
+      } else {
+        // If we are "Edit Mode" but via localScriptId (after auto-save of a new script),
+        // we might want to fetch history? 
+        // For simplicity, createScriptFromCode initializes empty history for new IDs.
+        // If we are re-saving the same ID, saveScript handles history append.
+      }
+
       await saveScript(script);
-      onSave();
-    } catch (e) { setError(t('failedToSave')); }
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 2000);
+      return true;
+    } catch (e) {
+      setError(t('failedToSave'));
+      return false;
+    }
+  };
+
+  const handleManualSave = async () => {
+    const success = await performInternalSave(code);
+    if (success) {
+      onSave(); // Close editor on manual save
+    }
   };
 
   const handleRestore = () => {
@@ -146,14 +182,20 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
     setIsGenerating(true);
     setError(null);
     let newCode = "";
-    const isUpdateMode = code.trim() !== DEFAULT_SCRIPT_TEMPLATE.trim() && code.trim().length > 0;
+    // If user has modified the template or we are editing, use update mode
+    const isUpdateMode = (code.trim() !== DEFAULT_SCRIPT_TEMPLATE.trim() && code.trim().length > 0) || !!localScriptId;
 
     try {
       await generateScriptWithAI(prompt, (chunk) => {
         newCode += chunk;
         if (newCode.length > 20) setCode(newCode);
       }, isUpdateMode ? code : undefined, contextUrl);
-      if (newCode) setCode(newCode);
+      
+      if (newCode) {
+        setCode(newCode);
+        // Automatic Save after generation
+        await performInternalSave(newCode);
+      }
     } catch (err: any) {
       setError(err.message === 'MISSING_API_KEY' ? t('apiKeyMissing') : t('aiError'));
     } finally {
@@ -174,14 +216,23 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
             <ArrowLeft size={20} />
           </button>
           <div className="flex flex-col">
-            <span className="text-xs font-bold text-slate-800">{initialScript ? t('editorEdit') : t('editorNew')}</span>
+            <span className="text-xs font-bold text-slate-800">{localScriptId ? t('editorEdit') : t('editorNew')}</span>
             <span className="text-[10px] text-slate-400 flex items-center gap-1"><Link2 size={10} /> {contextDomain}</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {initialScript && (
+          {saveStatus === 'saved' && (
+            <span className="text-[10px] font-bold text-green-600 flex items-center gap-1 animate-in fade-in slide-in-from-right-2">
+              <Check size={12} /> {t('saved')}
+            </span>
+          )}
+
+          {(initialScript || localScriptId) && (
              <>
-               <button onClick={() => exportScriptFile(initialScript)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded" title={t('exportScript')}>
+               <button onClick={() => {
+                   const tempScript = createScriptFromCode(code, localScriptId);
+                   exportScriptFile(tempScript);
+               }} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded" title={t('exportScript')}>
                  <Download size={18} />
                </button>
                <button onClick={() => setShowHistory(!showHistory)} className={`p-1.5 rounded transition-colors ${showHistory ? 'text-indigo-600 bg-indigo-50' : 'text-slate-400 hover:text-indigo-600 hover:bg-indigo-50'}`} title={t('history')}>
@@ -189,7 +240,7 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
                </button>
              </>
           )}
-          <button onClick={handleSave} className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-700 shadow-sm shadow-indigo-200 transition-all flex items-center gap-1.5">
+          <button onClick={handleManualSave} className="bg-indigo-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-700 shadow-sm shadow-indigo-200 transition-all flex items-center gap-1.5">
             <Save size={14} /> {t('save')}
           </button>
         </div>
@@ -212,7 +263,7 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
                   type="text" 
                   value={prompt} 
                   onChange={(e) => setPrompt(e.target.value)} 
-                  placeholder={code.length > 100 ? t('promptUpdatePlaceholder') : t('promptPlaceholder')}
+                  placeholder={code.length > 100 || localScriptId ? t('promptUpdatePlaceholder') : t('promptPlaceholder')}
                   disabled={isGenerating}
                   className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 outline-none transition-all"
                />

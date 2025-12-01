@@ -177,13 +177,17 @@ export const generateScriptWithAI = async (
       5. **Full Output**: Return the COMPLETE updated script code, not just the changes.
       6. **Format**: Return ONLY valid JavaScript. NO markdown code blocks (\`\`\`).
       7. **Robustness**: Ensure both old and new logic handles dynamic DOM loading (SPAs) gracefully.
+      8. **Version Control**: Analyze the changes made. AUTOMATICALLY increment the @version number in the metadata block based on Semantic Versioning:
+         - **Patch** (e.g., 0.1.0 -> 0.1.1): for bug fixes, tweaks, or small adjustments.
+         - **Minor** (e.g., 0.1.0 -> 0.2.0): for new features, new functions, or significant logic changes.
+         - **Major** (e.g., 1.0.0 -> 2.0.0): for complete rewrites or breaking changes.
       `;
 
       if (contextUrl) {
         systemPrompt += `\nContext URL: ${contextUrl} (Use this to verify logic against current site)`;
       }
 
-      userContent = `ORIGINAL CODE:\n${currentCode}\n\nNEW REQUIREMENT:\n${requirement}\n\nINSTRUCTION:\nApply the new requirement to the ORIGINAL CODE without losing existing features. Return the full updated code.`;
+      userContent = `ORIGINAL CODE:\n${currentCode}\n\nNEW REQUIREMENT:\n${requirement}\n\nINSTRUCTION:\nApply the new requirement to the ORIGINAL CODE without losing existing features. Update the @version appropriately. Return the full updated code.`;
     }
 
     if (provider === AIProvider.GOOGLE) {
