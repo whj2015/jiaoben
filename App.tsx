@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import ScriptList from './components/ScriptList';
 import ScriptEditor from './components/ScriptEditor';
+import ErrorBoundary from './components/ErrorBoundary';
 import { ViewState, UserScript, Language, AIProvider } from './types';
 import { CheckCircle, Key, Eye, EyeOff, AlertTriangle, Globe, Bot, Database, Upload, Download } from 'lucide-react';
 import { 
@@ -161,4 +162,12 @@ const MainApp: React.FC = () => {
   );
 };
 
-export default function App() { return <LanguageProvider><MainApp /></LanguageProvider>; }
+export default function App() { 
+  return (
+    <ErrorBoundary>
+      <LanguageProvider>
+        <MainApp />
+      </LanguageProvider>
+    </ErrorBoundary>
+  );
+}

@@ -1,6 +1,16 @@
 import { TabInfo } from '../types';
 
-declare var chrome: any;
+interface ChromeTabs {
+  query: (queryInfo: chrome.tabs.QueryInfo, callback: (tabs: chrome.tabs.Tab[]) => void) => void;
+  update: (tabId: number, updateProperties: chrome.tabs.UpdateProperties, callback?: () => void) => void;
+  remove: (tabIds: number | number[], callback?: () => void) => void;
+}
+
+interface ChromeRuntime {
+  tabs?: ChromeTabs;
+}
+
+declare var chrome: { tabs?: ChromeTabs };
 
 const isExtensionEnv = typeof chrome !== 'undefined' && !!chrome.tabs;
 
@@ -10,19 +20,18 @@ const isExtensionEnv = typeof chrome !== 'undefined' && !!chrome.tabs;
 export const getTabs = async (): Promise<TabInfo[]> => {
   if (isExtensionEnv) {
     return new Promise((resolve) => {
-      chrome.tabs.query({}, (tabs: any[]) => {
+      chrome.tabs!.query({}, (tabs: chrome.tabs.Tab[]) => {
         const tabList = tabs.map(t => ({
-          id: t.id,
-          title: t.title,
-          url: t.url,
+          id: t.id || 0,
+          title: t.title || '',
+          url: t.url || '',
           favIconUrl: t.favIconUrl,
-          active: t.active
+          active: t.active || false
         }));
         resolve(tabList);
       });
     });
   } else {
-    // Mock for development in non-extension environment
     return [
       { id: 1, title: 'Google', url: 'https://google.com', active: true, favIconUrl: 'https://www.google.com/favicon.ico' },
       { id: 2, title: 'GitHub', url: 'https://github.com', active: false, favIconUrl: 'https://github.com/favicon.ico' },
@@ -37,16 +46,15 @@ export const getTabs = async (): Promise<TabInfo[]> => {
 export const getActiveTabInfo = async (): Promise<TabInfo | null> => {
   if (isExtensionEnv) {
     return new Promise((resolve) => {
-      // Must use currentWindow: true to get the user's actual focus
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs: any[]) => {
+      chrome.tabs!.query({ active: true, currentWindow: true }, (tabs: chrome.tabs.Tab[]) => {
         if (tabs && tabs.length > 0) {
           const t = tabs[0];
           resolve({
-            id: t.id,
-            title: t.title,
-            url: t.url,
+            id: t.id || 0,
+            title: t.title || '',
+            url: t.url || '',
             favIconUrl: t.favIconUrl,
-            active: t.active
+            active: t.active || false
           });
         } else {
           resolve(null);
@@ -54,7 +62,6 @@ export const getActiveTabInfo = async (): Promise<TabInfo | null> => {
       });
     });
   } else {
-    // Mock return active tab
     return { id: 1, title: 'Google', url: 'https://google.com', active: true, favIconUrl: 'https://www.google.com/favicon.ico' };
   }
 };

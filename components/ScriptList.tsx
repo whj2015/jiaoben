@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { UserScript } from '../types';
 import { getScripts, toggleScript, deleteScript, importScripts, exportBackup } from '../services/scriptService';
 import { ToggleLeft, ToggleRight, Edit, Trash2, Box, Upload, Download, FileJson } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
+import { escapeHtml } from '../utils/helpers';
 
 interface ScriptListProps {
   onEdit: (script: UserScript) => void;
@@ -12,44 +13,62 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
   const [scripts, setScripts] = useState<UserScript[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { t } = useTranslation();
 
-  const loadScripts = async () => {
-    setLoading(true);
-    const data = await getScripts();
-    setScripts(data);
-    setLoading(false);
-  };
+  const loadScripts = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getScripts();
+      setScripts(data);
+    } catch (err) {
+      console.error('[ScriptList] Failed to load scripts:', err);
+      setError(t('importError') + (err instanceof Error ? err.message : 'Unknown error'));
+    } finally {
+      setLoading(false);
+    }
+  }, [t]);
 
   useEffect(() => {
     loadScripts();
-  }, []);
+  }, [loadScripts]);
 
-  const handleToggle = async (id: string, current: boolean) => {
-    await toggleScript(id, !current);
-    loadScripts();
-  };
+  const handleToggle = useCallback(async (id: string, current: boolean) => {
+    try {
+      await toggleScript(id, !current);
+      await loadScripts();
+    } catch (err) {
+      console.error('[ScriptList] Failed to toggle script:', err);
+      setError(t('importError') + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+  }, [loadScripts, t]);
 
-  const handleDelete = async (e: React.MouseEvent, id: string) => {
+  const handleDelete = useCallback(async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (confirm(t('confirmDelete'))) {
-      await deleteScript(id);
-      loadScripts();
+      try {
+        await deleteScript(id);
+        await loadScripts();
+      } catch (err) {
+        console.error('[ScriptList] Failed to delete script:', err);
+        setError(t('importError') + (err instanceof Error ? err.message : 'Unknown error'));
+      }
     }
-  };
+  }, [loadScripts, t]);
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
-  };
+  }, []);
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-  };
+  }, []);
 
-  const handleDrop = async (e: React.DragEvent) => {
+  const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     
@@ -58,24 +77,26 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
       try {
         const count = await importScripts(file);
         alert(t('importSuccess', { count: count.toString() }));
-        loadScripts();
+        await loadScripts();
       } catch (err) {
-        alert(t('importError') + err);
+        console.error('[ScriptList] Import failed:', err);
+        setError(t('importError') + (err instanceof Error ? err.message : 'Unknown error'));
       }
     }
-  };
+  }, [loadScripts, t]);
 
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       try {
         const count = await importScripts(e.target.files[0]);
         alert(t('importSuccess', { count: count.toString() }));
-        loadScripts();
+        await loadScripts();
       } catch (err) {
-        alert(t('importError') + err);
+        console.error('[ScriptList] Import failed:', err);
+        setError(t('importError') + (err instanceof Error ? err.message : 'Unknown error'));
       }
     }
-  };
+  }, [loadScripts, t]);
 
   if (loading) return <div className="p-10 text-center text-slate-400 text-sm">{t('loading')}</div>;
 
@@ -86,7 +107,6 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Top Toolbar */}
       <div className="px-4 py-3 bg-white border-b border-slate-200 flex justify-between items-center shadow-sm z-10">
         <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('installedScripts')}</h2>
         <div className="flex gap-2">
@@ -108,7 +128,18 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
         </div>
       </div>
       
-      {/* Drag Overlay */}
+      {error && (
+        <div className="mx-4 mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs">
+          {error}
+          <button 
+            onClick={() => setError(null)}
+            className="ml-2 text-red-600 hover:text-red-800 font-bold"
+          >
+            ×
+          </button>
+        </div>
+      )}
+      
       {isDragging && (
         <div className="absolute inset-0 z-50 bg-indigo-500/10 backdrop-blur-sm border-2 border-dashed border-indigo-500 m-4 rounded-xl flex items-center justify-center pointer-events-none">
           <div className="bg-white p-4 rounded-xl shadow-xl flex flex-col items-center text-indigo-600 animate-in fade-in">
@@ -118,7 +149,6 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
         </div>
       )}
 
-      {/* List */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {scripts.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-slate-400 pb-10">
@@ -134,14 +164,22 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
               <div className="flex justify-between items-start mb-3">
                 <div className="flex-1 min-w-0 pr-2">
                   <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-sm font-bold text-slate-800 truncate" title={script.name}>{script.name}</h3>
-                    <span className="bg-slate-100 text-slate-500 text-[10px] px-1.5 py-0.5 rounded font-mono">v{script.version}</span>
+                    <h3 
+                      className="text-sm font-bold text-slate-800 truncate" 
+                      title={escapeHtml(script.name)}
+                      dangerouslySetInnerHTML={{ __html: escapeHtml(script.name) }}
+                    />
+                    <span className="bg-slate-100 text-slate-500 text-[10px] px-1.5 py-0.5 rounded font-mono">v{escapeHtml(script.version)}</span>
                   </div>
-                  <p className="text-xs text-slate-500 truncate">{script.description || t('noDescription')}</p>
+                  <p 
+                    className="text-xs text-slate-500 truncate"
+                    dangerouslySetInnerHTML={{ __html: escapeHtml(script.description || t('noDescription')) }}
+                  />
                 </div>
                 <button 
                   onClick={() => handleToggle(script.id, script.enabled)}
                   className={`flex-shrink-0 transition-colors ${script.enabled ? 'text-green-500 hover:text-green-600' : 'text-slate-300 hover:text-slate-400'}`}
+                  aria-label={script.enabled ? 'Disable script' : 'Enable script'}
                 >
                   {script.enabled ? <ToggleRight size={28} /> : <ToggleLeft size={28} />}
                 </button>
@@ -150,8 +188,8 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
               <div className="flex items-center justify-between pt-3 border-t border-slate-50">
                 <div className="flex gap-1.5">
                    {script.match.slice(0, 2).map((m, i) => (
-                     <span key={i} className="text-[10px] bg-slate-50 text-slate-500 px-2 py-1 rounded border border-slate-100 max-w-[100px] truncate">
-                       {m}
+                     <span key={i} className="text-[10px] bg-slate-50 text-slate-500 px-2 py-1 rounded border border-slate-100 max-w-[100px] truncate" title={escapeHtml(m)}>
+                       {escapeHtml(m)}
                      </span>
                    ))}
                    {script.match.length > 2 && <span className="text-[10px] text-slate-400 px-1 py-1">+{script.match.length - 2}</span>}
@@ -161,12 +199,14 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
                   <button 
                     onClick={() => onEdit(script)}
                     className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                    aria-label={t('edit')}
                   >
                     <Edit size={14} />
                   </button>
                   <button 
                     onClick={(e) => handleDelete(e, script.id)}
                     className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                    aria-label={t('delete')}
                   >
                     <Trash2 size={14} />
                   </button>

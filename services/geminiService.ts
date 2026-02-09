@@ -2,29 +2,91 @@ import { GoogleGenAI } from "@google/genai";
 import { getStoredApiKey, getStoredDeepSeekKey, getStoredAIProvider } from "./scriptService";
 import { AIProvider } from "../types";
 
-// --- Google Gemini Implementation ---
+const MAX_RESPONSE_LENGTH = 100000;
+const REQUEST_TIMEOUT = 60000;
+
+interface StreamChunk {
+  text: string;
+  done?: boolean;
+}
+
+class TimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TimeoutError';
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => 
+      setTimeout(() => reject(new TimeoutError(`Request timeout after ${timeoutMs}ms`)), timeoutMs)
+    )
+  ]);
+}
+
+function validateApiKey(apiKey: string): boolean {
+  if (!apiKey || typeof apiKey !== 'string') return false;
+  if (apiKey.trim().length < 10) return false;
+  return true;
+}
+
+function sanitizeUserInput(input: string): string {
+  if (!input) return '';
+  return input
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .trim()
+    .substring(0, 10000);
+}
+
+function escapeHtmlInCode(code: string): string {
+  return code
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 const callGeminiStream = async (
   apiKey: string,
   systemInstruction: string,
   userContent: string,
   onChunk: (text: string) => void
-) => {
-  const ai = new GoogleGenAI({ apiKey: apiKey });
-  const model = 'gemini-2.5-flash';
+): Promise<void> => {
+  try {
+    const ai = new GoogleGenAI({ apiKey: apiKey });
+    const model = 'gemini-2.5-flash';
 
-  const result = await ai.models.generateContentStream({
-    model: model,
-    contents: userContent,
-    config: {
-      systemInstruction: systemInstruction,
-    }
-  });
+    const result = await withTimeout(
+      ai.models.generateContentStream({
+        model: model,
+        contents: userContent,
+        config: {
+          systemInstruction: systemInstruction,
+          maxOutputTokens: 8192
+        }
+      }),
+      REQUEST_TIMEOUT
+    );
 
-  for await (const chunk of result) {
-    const text = chunk.text;
-    if (text) {
-      onChunk(text);
+    let totalLength = 0;
+    for await (const chunk of result) {
+      const text = chunk.text;
+      if (text) {
+        if (totalLength + text.length > MAX_RESPONSE_LENGTH) {
+          onChunk(text.substring(0, MAX_RESPONSE_LENGTH - totalLength));
+          break;
+        }
+        onChunk(text);
+        totalLength += text.length;
+      }
     }
+  } catch (error) {
+    console.error('[GeminiService] Stream error:', error);
+    if (error instanceof TimeoutError) {
+      throw new Error('AI request timeout');
+    }
+    throw error;
   }
 };
 
@@ -33,97 +95,141 @@ const callGeminiChatStream = async (
   systemInstruction: string,
   message: string,
   onChunk: (text: string) => void
-) => {
-  const ai = new GoogleGenAI({ apiKey: apiKey });
-  const model = 'gemini-2.5-flash';
+): Promise<void> => {
+  try {
+    const ai = new GoogleGenAI({ apiKey: apiKey });
+    const model = 'gemini-2.5-flash';
 
-  const chat = ai.chats.create({
-    model: model,
-    config: {
-      systemInstruction: systemInstruction,
+    const chat = ai.chats.create({
+      model: model,
+      config: {
+        systemInstruction: systemInstruction,
+        maxOutputTokens: 8192
+      }
+    });
+
+    const result = await withTimeout(
+      chat.sendMessageStream({ message: message }),
+      REQUEST_TIMEOUT
+    );
+
+    let totalLength = 0;
+    for await (const chunk of result) {
+      const text = chunk.text;
+      if (text) {
+        if (totalLength + text.length > MAX_RESPONSE_LENGTH) {
+          onChunk(text.substring(0, MAX_RESPONSE_LENGTH - totalLength));
+          break;
+        }
+        onChunk(text);
+        totalLength += text.length;
+      }
     }
-  });
-
-  const result = await chat.sendMessageStream({ message: message });
-
-  for await (const chunk of result) {
-    const text = chunk.text;
-    if (text) {
-      onChunk(text);
+  } catch (error) {
+    console.error('[GeminiService] Chat stream error:', error);
+    if (error instanceof TimeoutError) {
+      throw new Error('AI request timeout');
     }
+    throw error;
   }
 };
 
-// --- DeepSeek Implementation (OpenAI Compatible) ---
 const callDeepSeekStream = async (
   apiKey: string,
   systemInstruction: string,
   userContent: string | { role: string, content: string }[],
   onChunk: (text: string) => void
-) => {
-  const messages = [];
-  if (systemInstruction) {
-    messages.push({ role: 'system', content: systemInstruction });
-  }
+): Promise<void> => {
+  try {
+    const messages: Array<{ role: string; content: string }> = [];
+    if (systemInstruction) {
+      messages.push({ role: 'system', content: systemInstruction });
+    }
 
-  if (typeof userContent === 'string') {
-    messages.push({ role: 'user', content: userContent });
-  } else if (Array.isArray(userContent)) {
-    messages.push(...userContent);
-  }
+    if (typeof userContent === 'string') {
+      messages.push({ role: 'user', content: userContent });
+    } else if (Array.isArray(userContent)) {
+      messages.push(...userContent);
+    }
 
-  const response = await fetch('https://api.deepseek.com/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: messages,
-      stream: true
-    })
-  });
+    const response = await withTimeout(
+      fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: messages,
+          stream: true,
+          max_tokens: 8192
+        })
+      }),
+      REQUEST_TIMEOUT
+    );
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`DeepSeek API Error: ${response.status} ${response.statusText} - ${errText}`);
-  }
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`DeepSeek API Error: ${response.status} ${response.statusText} - ${errText}`);
+    }
 
-  const reader = response.body?.getReader();
-  const decoder = new TextDecoder();
-  if (!reader) return;
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    if (!reader) {
+      throw new Error('No response body');
+    }
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    const chunk = decoder.decode(value);
-    const lines = chunk.split('\n');
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const data = line.slice(6);
-        if (data === '[DONE]') return;
-        try {
-          const json = JSON.parse(data);
-          const content = json.choices[0]?.delta?.content;
-          if (content) onChunk(content);
-        } catch (e) {
-          // ignore invalid json or incomplete chunks
+    let totalLength = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n');
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') return;
+          
+          try {
+            const json = JSON.parse(data);
+            const content = json.choices[0]?.delta?.content;
+            if (content) {
+              if (totalLength + content.length > MAX_RESPONSE_LENGTH) {
+                onChunk(content.substring(0, MAX_RESPONSE_LENGTH - totalLength));
+                break;
+              }
+              onChunk(content);
+              totalLength += content.length;
+            }
+          } catch (e) {
+          }
         }
       }
     }
+  } catch (error) {
+    console.error('[DeepSeekService] Stream error:', error);
+    if (error instanceof TimeoutError) {
+      throw new Error('AI request timeout');
+    }
+    throw error;
   }
 };
-
-// --- Main Service Functions ---
 
 export const generateScriptWithAI = async (
   requirement: string,
   onChunk: (text: string) => void,
   currentCode?: string,
   contextUrl?: string
-) => {
+): Promise<void> => {
   try {
+    const sanitizedRequirement = sanitizeUserInput(requirement);
+    if (!sanitizedRequirement) {
+      throw new Error('Invalid requirement');
+    }
+
     const provider = await getStoredAIProvider();
     
     let apiKey = '';
@@ -134,7 +240,9 @@ export const generateScriptWithAI = async (
       apiKey = await getStoredDeepSeekKey();
     }
 
-    if (!apiKey) throw new Error("MISSING_API_KEY");
+    if (!validateApiKey(apiKey)) {
+      throw new Error("MISSING_API_KEY");
+    }
 
     let systemPrompt = `你是一位精通 UserScript (Tampermonkey/Violentmonkey) 的 JavaScript 开发专家。
     你的任务是根据用户的需求编写完整、有效的 UserScript。
@@ -155,7 +263,7 @@ export const generateScriptWithAI = async (
     if (contextUrl) {
       systemPrompt += `\n
       上下文感知：
-      用户正在浏览：${contextUrl}
+      用户正在浏览：${sanitizeUserInput(contextUrl)}
       - 设置 @match 以匹配此域名 (例如 *://example.com/*)。
       - 针对此网站的结构编写逻辑。
       `;
@@ -163,9 +271,8 @@ export const generateScriptWithAI = async (
       systemPrompt += `\n根据需求包含智能的 @match 规则。`;
     }
 
-    let userContent = requirement;
+    let userContent = sanitizedRequirement;
 
-    // 如果提供了现有代码，切换为更新模式
     if (currentCode) {
       systemPrompt = `你是一位 UserScript 开发专家。
       你的任务是修改现有的 UserScript 以满足新的需求，同时严格保留现有功能。
@@ -186,10 +293,10 @@ export const generateScriptWithAI = async (
       `;
 
       if (contextUrl) {
-        systemPrompt += `\n上下文 URL: ${contextUrl} (使用此 URL 验证逻辑是否符合当前站点)`;
+        systemPrompt += `\n上下文 URL: ${sanitizeUserInput(contextUrl)} (使用此 URL 验证逻辑是否符合当前站点)`;
       }
 
-      userContent = `原始代码：\n${currentCode}\n\n新需求：\n${requirement}\n\n指令：\n将新需求应用于原始代码，且不丢失现有功能。适当更新 @version。返回完整的更新后代码。`;
+      userContent = `原始代码：\n${currentCode}\n\n新需求：\n${sanitizedRequirement}\n\n指令：\n将新需求应用于原始代码，且不丢失现有功能。适当更新 @version。返回完整的更新后代码。`;
     }
 
     if (provider === AIProvider.GOOGLE) {
@@ -199,7 +306,7 @@ export const generateScriptWithAI = async (
     }
 
   } catch (error) {
-    console.error("AI Generation Error:", error);
+    console.error("[AIService] Generation Error:", error);
     throw error;
   }
 };
@@ -207,8 +314,13 @@ export const generateScriptWithAI = async (
 export const streamChatResponse = async (
   message: string,
   onChunk: (text: string) => void
-) => {
+): Promise<void> => {
   try {
+    const sanitizedMessage = sanitizeUserInput(message);
+    if (!sanitizedMessage) {
+      throw new Error('Invalid message');
+    }
+
     const provider = await getStoredAIProvider();
     
     let apiKey = '';
@@ -219,19 +331,20 @@ export const streamChatResponse = async (
       apiKey = await getStoredDeepSeekKey();
     }
 
-    if (!apiKey) throw new Error("MISSING_API_KEY");
+    if (!validateApiKey(apiKey)) {
+      throw new Error("MISSING_API_KEY");
+    }
 
     const systemInstruction = "你是一个浏览器扩展管理器中的智能 AI 助手。请使用中文协助用户完成网页浏览任务、总结内容、解释脚本代码或回答技术问题。";
 
     if (provider === AIProvider.GOOGLE) {
-      await callGeminiChatStream(apiKey, systemInstruction, message, onChunk);
+      await callGeminiChatStream(apiKey, systemInstruction, sanitizedMessage, onChunk);
     } else {
-      // DeepSeek simple chat stream
-      await callDeepSeekStream(apiKey, systemInstruction, message, onChunk);
+      await callDeepSeekStream(apiKey, systemInstruction, sanitizedMessage, onChunk);
     }
 
   } catch (error) {
-    console.error("AI Chat Error:", error);
+    console.error("[AIService] Chat Error:", error);
     throw error;
   }
 };

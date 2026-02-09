@@ -1,33 +1,68 @@
 // assets/content.ts
 // 运行在 Isolated World，负责在页面脚本(Main World)和后台(Background)之间转发消息
 
+interface GMXhrRequestEvent extends CustomEvent {
+  detail: {
+    requestId: string;
+    method?: string;
+    url: string;
+    headers?: Record<string, string>;
+    data?: string;
+    binary?: boolean;
+  };
+}
+
+interface GMXhrResponseEvent extends CustomEvent {
+  detail: {
+    requestId: string;
+    error?: string;
+    status?: number;
+    statusText?: string;
+    responseHeaders?: string;
+    responseText?: string;
+    finalUrl?: string;
+  };
+}
+
+const GM_XHR_REQUEST = 'EG_GM_xhr_request';
+const GM_XHR_RESPONSE = 'EG_GM_xhr_response';
+
 console.log('[EdgeGenius] Content Script Loaded');
 
-// 监听来自页面脚本(Main World)的请求事件
-window.addEventListener('EG_GM_xhr_request', async (event: any) => {
-  const { requestId, ...requestDetails } = event.detail;
+const handleGMXhrRequest = async (event: Event) => {
+  const customEvent = event as GMXhrRequestEvent;
+  const { requestId, ...requestDetails } = customEvent.detail;
 
   try {
-    // 转发给后台 (Background) 执行真正的跨域请求
+    if (!requestDetails.url || typeof requestDetails.url !== 'string') {
+      throw new Error('Invalid URL');
+    }
+
     const response = await chrome.runtime.sendMessage({
       type: 'GM_XHR',
       payload: requestDetails
     });
 
-    // 将后台的响应转回给页面脚本
-    window.dispatchEvent(new CustomEvent('EG_GM_xhr_response', {
+    window.dispatchEvent(new CustomEvent(GM_XHR_RESPONSE, {
       detail: {
         requestId,
         ...response
       }
     }));
-  } catch (error: any) {
-    // 错误处理
-    window.dispatchEvent(new CustomEvent('EG_GM_xhr_response', {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown Error';
+    console.error('[Content] XHR request failed:', error);
+    window.dispatchEvent(new CustomEvent(GM_XHR_RESPONSE, {
       detail: {
         requestId,
-        error: error.message || 'Unknown Error'
+        error: errorMessage
       }
     }));
   }
+};
+
+window.addEventListener(GM_XHR_REQUEST, handleGMXhrRequest);
+
+window.addEventListener('unload', () => {
+  window.removeEventListener(GM_XHR_REQUEST, handleGMXhrRequest);
 });
