@@ -5,6 +5,9 @@ import { Send, Settings } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
 import { escapeHtml } from '../utils/helpers';
 
+// 常量定义
+const MAX_INPUT_LENGTH = 5000;
+
 interface AIAssistantProps {
   onRequestSettings?: () => void;
 }
@@ -15,7 +18,6 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onRequestSettings }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isError, setIsError] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -38,14 +40,13 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onRequestSettings }) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    const sanitizedInput = input.trim().substring(0, 5000);
+    const sanitizedInput = input.trim().substring(0, MAX_INPUT_LENGTH);
     if (!sanitizedInput) return;
 
     const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', text: sanitizedInput };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsLoading(true);
-    setIsError(false);
     setError(null);
 
     const modelMsgId = (Date.now() + 1).toString();
@@ -68,7 +69,6 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onRequestSettings }) => {
     } catch (error: unknown) {
       console.error('[AIAssistant] Chat error:', error);
       const isMissingKey = error instanceof Error && error.message === 'MISSING_API_KEY';
-      setIsError(true);
       
       const errorMsg = isMissingKey 
         ? t('configKeyMsg') 
@@ -157,7 +157,7 @@ const AIAssistant: React.FC<AIAssistantProps> = ({ onRequestSettings }) => {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder={t('askAi')}
-            maxLength={5000}
+            maxLength={MAX_INPUT_LENGTH}
             className="w-full pl-4 pr-12 py-2.5 bg-gray-100 border-transparent focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-200 rounded-full text-sm transition-all outline-none"
             disabled={isLoading}
             aria-label="Ask AI"

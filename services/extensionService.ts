@@ -6,10 +6,6 @@ interface ChromeTabs {
   remove: (tabIds: number | number[], callback?: () => void) => void;
 }
 
-interface ChromeRuntime {
-  tabs?: ChromeTabs;
-}
-
 declare var chrome: { tabs?: ChromeTabs };
 
 const isExtensionEnv = typeof chrome !== 'undefined' && !!chrome.tabs;
@@ -70,7 +66,7 @@ export const getActiveTabInfo = async (): Promise<TabInfo | null> => {
  * Activate a specific tab
  */
 export const activateTab = (tabId: number) => {
-  if (isExtensionEnv) {
+  if (isExtensionEnv && chrome.tabs) {
     chrome.tabs.update(tabId, { active: true });
   } else {
     console.log(`[Mock] Activated tab ${tabId}`);
@@ -81,7 +77,7 @@ export const activateTab = (tabId: number) => {
  * Close a specific tab
  */
 export const closeTab = (tabId: number) => {
-  if (isExtensionEnv) {
+  if (isExtensionEnv && chrome.tabs) {
     chrome.tabs.remove(tabId);
   } else {
     console.log(`[Mock] Closed tab ${tabId}`);

@@ -3,12 +3,17 @@ import { UserScript, ScriptVersion } from '../types';
 import { DEFAULT_SCRIPT_TEMPLATE, saveScript, createScriptFromCode, deleteScriptVersion, exportScriptFile } from '../services/scriptService';
 import { generateScriptWithAI } from '../services/geminiService';
 import { getActiveTabInfo } from '../services/extensionService';
-import { Save, Sparkles, AlertCircle, ArrowLeft, RefreshCw, Link2, History, RotateCcw, X, Clock, Split, Trash2, Download, Check } from 'lucide-react';
+import { Save, Sparkles, AlertCircle, ArrowLeft, Link2, History, X, Clock, Split, Trash2, Download, Check } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
 import { diffLines, processDiffWithContext } from '../utils/simpleDiff';
 import { escapeHtml, formatTimestamp, debounce } from '../utils/helpers';
 
-const MAX_SCRIPT_SIZE = 1024 * 1024;
+// 常量定义
+const MAX_SCRIPT_SIZE = 1024 * 1024; // 1MB
+const MAX_PROMPT_LENGTH = 5000;
+const DEBOUNCE_DELAY = 500;
+const SAVE_STATUS_TIMEOUT = 2000;
+const MIN_CODE_LENGTH_FOR_UPDATE = 20;
 
 interface ScriptEditorProps {
   initialScript?: UserScript | null;
@@ -37,8 +42,6 @@ const HistoryDiffModal: React.FC<{
     return diffData.map((block, bIdx) => {
       if (block.type === 'collapsed') {
         const lineCount = block.lines.length;
-        const collapsedOldLineNum = oldLineNum;
-        const collapsedNewLineNum = newLineNum;
         oldLineNum += lineCount;
         newLineNum += lineCount;
         return (
@@ -51,7 +54,6 @@ const HistoryDiffModal: React.FC<{
          const isAdded = line.added;
          const isRemoved = line.removed;
          const currentOld = isAdded ? null : oldLineNum++;
-         const currentNew = isRemoved ? null : newLineNum++;
          return (
            <div key={`${bIdx}-${lIdx}`} className={`flex ${isAdded ? 'bg-green-50/50' : isRemoved ? 'bg-red-50/50' : ''}`}>
              <div className="w-12 flex-shrink-0 flex text-slate-300 select-none bg-slate-50 border-r border-slate-100 text-right pr-2 gap-2">
@@ -107,7 +109,6 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
   const [localScriptId, setLocalScriptId] = useState<string | undefined>(initialScript?.id);
   const [showHistory, setShowHistory] = useState(false);
   const [viewingVersion, setViewingVersion] = useState<ScriptVersion | null>(null);
-  const [historyUpdateTrigger, setHistoryUpdateTrigger] = useState(0);
   const abortControllerRef = useRef<AbortController | null>(null);
   
   const { t } = useTranslation();
@@ -126,7 +127,7 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
 
       await saveScript(script);
       setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
+      setTimeout(() => setSaveStatus('idle'), SAVE_STATUS_TIMEOUT);
       return true;
     } catch (e) {
       setError(t('failedToSave'));
@@ -152,7 +153,7 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
       try {
         await generateScriptWithAI(prompt, (chunk) => {
           newCode += chunk;
-          if (newCode.length > 20) setCode(newCode);
+          if (newCode.length > MIN_CODE_LENGTH_FOR_UPDATE) setCode(newCode);
         }, isUpdateMode ? code : undefined, contextUrl);
         
         if (newCode) {
@@ -166,7 +167,7 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
         setIsGenerating(false);
         abortControllerRef.current = null;
       }
-    }, 500),
+    }, DEBOUNCE_DELAY),
     [prompt, code, localScriptId, contextUrl, performInternalSave, t, isGenerating]
   );
 
@@ -200,7 +201,8 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
       try {
         await deleteScriptVersion(initialScript.id, timestamp);
         initialScript.history = initialScript.history?.filter(h => h.timestamp !== timestamp);
-        setHistoryUpdateTrigger(prev => prev + 1);
+        // Force re-render by creating new array reference
+        initialScript.history = [...(initialScript.history || [])];
       } catch (err) {
         console.error('[ScriptEditor] Failed to delete version:', err);
         setError(t('failedToSave'));
@@ -208,7 +210,14 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
     }
   }, [initialScript, t]);
 
-  const contextDomain = contextUrl ? new URL(contextUrl).hostname : t('globalContext');
+  const contextDomain = (() => {
+    if (!contextUrl) return t('globalContext');
+    try {
+      return new URL(contextUrl).hostname;
+    } catch {
+      return t('globalContext');
+    }
+  })();
 
   return (
     <div className="flex flex-col h-full bg-white relative overflow-hidden">
@@ -270,12 +279,12 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
-                      handleAIGenerate();
+                      debouncedAIGenerate();
                     }
                   }}
                   placeholder={code.length > 100 || localScriptId ? t('promptUpdatePlaceholder') : t('promptPlaceholder')}
                   disabled={isGenerating}
-                  maxLength={5000}
+                  maxLength={MAX_PROMPT_LENGTH}
                   className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 outline-none transition-all"
                   aria-label="AI prompt input"
                />

@@ -1,14 +1,9 @@
 // background.ts
 // 该文件在 Service Worker 环境中运行
 
-const GM_XHR_REQUEST = 'EG_GM_xhr_request';
-const GM_XHR_RESPONSE = 'EG_GM_xhr_response';
+import { GM_XHR_REQUEST, GM_XHR_RESPONSE } from './utils/constants';
 
-interface TabInfo {
-  id: number;
-  url?: string;
-  status?: string;
-}
+// TabInfo interface removed as it was unused locally
 
 interface ScriptInfo {
   id: string;
@@ -27,6 +22,45 @@ interface XHRPayload {
   headers?: Record<string, string>;
   data?: string;
 }
+
+// GM API 类型定义
+interface GMInfo {
+  script: {
+    name: string;
+    version: string;
+    description: string;
+  };
+}
+
+interface GMXHRResponse {
+  finalUrl?: string;
+  readyState: number;
+  status?: number;
+  statusText?: string;
+  responseHeaders?: string;
+  responseText?: string;
+  response?: string;
+  context?: unknown;
+}
+
+interface GMXHRDetails {
+  method?: string;
+  url: string;
+  headers?: Record<string, string>;
+  data?: string;
+  binary?: boolean;
+  context?: unknown;
+  onload?: (response: GMXHRResponse) => void;
+  onerror?: (error: { error: string }) => void;
+}
+
+type GMSetValue = (key: string, value: unknown) => void;
+type GMGetValue = (key: string, defaultValue?: unknown) => unknown;
+type GMLog = (message: unknown) => void;
+type GMXHR = (details: GMXHRDetails) => { abort: () => void };
+
+// 注意：GM API 类型仅用于类型定义
+// 实际赋值在 executeScript 的 func 中通过类型断言完成
 
 const tabScriptCounts: Record<number, number> = {};
 
@@ -89,7 +123,7 @@ if (typeof chrome !== 'undefined' && chrome.tabs) {
     delete tabScriptCounts[tabId];
   });
 
-  chrome.runtime.onMessage.addListener((message: { type: string; payload: XHRPayload }, sender: chrome.runtime.MessageSender, sendResponse: (response?: { status?: number; statusText?: string; responseHeaders?: string; responseText?: string; finalUrl?: string; error?: string }) => void) => {
+  chrome.runtime.onMessage.addListener((message: { type: string; payload: XHRPayload }, _sender: chrome.runtime.MessageSender, sendResponse: (response?: { status?: number; statusText?: string; responseHeaders?: string; responseText?: string; finalUrl?: string; error?: string }) => void) => {
     if (message.type === 'GM_XHR') {
       const { method, url, headers, data } = message.payload;
       
@@ -150,8 +184,6 @@ async function checkAndInjectScripts(tabId: number, url: string) {
     updateBadge(tabId);
 
     if (matchedScripts.length > 0) {
-      console.log(`[EdgeGenius] Injecting ${matchedScripts.length} scripts into ${url}`);
-      
       for (const script of matchedScripts) {
         injectScript(tabId, script);
       }
@@ -167,38 +199,50 @@ function injectScript(tabId: number, script: ScriptInfo) {
   chrome.scripting.executeScript({
     target: { tabId: tabId },
     func: (name: string, version: string, description: string, userCode: string) => {
-       (window as any).GM_info = {
+       const win = window as unknown as {
+         GM_info?: GMInfo;
+         GM_setValue?: GMSetValue;
+         GM_getValue?: GMGetValue;
+         GM_log?: GMLog;
+         GM_xmlhttpRequest?: GMXHR;
+         GM?: {
+           xmlHttpRequest: (details: GMXHRDetails) => Promise<GMXHRResponse>;
+         };
+       };
+       
+       win.GM_info = {
          script: { name, version, description }
        };
        
        const logPrefix = `[GM:${name}]`;
-       const safeLog = (msg: unknown) => console.log(logPrefix, msg);
+       const safeLog: GMLog = (msg) => console.log(logPrefix, msg);
 
        const storagePrefix = `GM_${name}_`;
-       (window as any).GM_setValue = (key: string, value: unknown) => {
+       win.GM_setValue = (key: string, value: unknown) => {
          try {
            localStorage.setItem(storagePrefix + key, String(value));
          } catch(e) { console.error(logPrefix, "GM_setValue failed", e); }
        };
-       (window as any).GM_getValue = (key: string, def: unknown) => {
-          return localStorage.getItem(storagePrefix + key) || def;
+       win.GM_getValue = (key: string, def?: unknown) => {
+          return localStorage.getItem(storagePrefix + key) ?? def;
        };
-       (window as any).GM_log = safeLog;
+       win.GM_log = safeLog;
 
-       (window as any).GM_xmlhttpRequest = (details: Record<string, unknown>) => {
+       win.GM_xmlhttpRequest = (details: GMXHRDetails) => {
           const requestId = 'gm_xhr_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
           
           const handler = (event: Event) => {
              const customEvent = event as CustomEvent;
-             const { requestId: respId, error, ...response } = customEvent.detail as Record<string, unknown>;
+             const detail = customEvent.detail as { requestId: string; error?: string } & Partial<GMXHRResponse>;
+             const { requestId: respId, error, ...response } = detail;
              if (respId !== requestId) return;
              
              window.removeEventListener(GM_XHR_RESPONSE, handler);
              
              if (error) {
-               if (details.onerror) (details.onerror as (error: { error: string }) => void)({ error });
+               if (details.onerror) details.onerror({ error });
              } else {
-               const respObj = {
+               const respObj: GMXHRResponse = {
                  finalUrl: response.finalUrl,
                  readyState: 4,
                  status: response.status,
@@ -208,7 +252,7 @@ function injectScript(tabId: number, script: ScriptInfo) {
                  response: response.responseText,
                  context: details.context
                };
-               if (details.onload) (details.onload as (response: Record<string, unknown>) => void)(respObj);
+               if (details.onload) details.onload(respObj);
              }
           };
 
@@ -232,14 +276,18 @@ function injectScript(tabId: number, script: ScriptInfo) {
           };
        };
 
-       (window as any).GM = (window as any).GM || {};
-       (window as any).GM.xmlHttpRequest = (details: Record<string, unknown>) => {
-          return new Promise((resolve, reject) => {
-             (window as any).GM_xmlhttpRequest({
-                ...details,
-                onload: resolve,
-                onerror: reject
-             });
+       win.GM = win.GM || { xmlHttpRequest: () => Promise.resolve({} as GMXHRResponse) };
+       win.GM.xmlHttpRequest = (details: GMXHRDetails) => {
+          return new Promise<GMXHRResponse>((resolve, reject) => {
+             if (win.GM_xmlhttpRequest) {
+               win.GM_xmlhttpRequest({
+                  ...details,
+                  onload: resolve,
+                  onerror: reject
+               });
+             } else {
+               reject(new Error('GM_xmlhttpRequest not available'));
+             }
           });
        };
        
@@ -257,7 +305,7 @@ function injectScript(tabId: number, script: ScriptInfo) {
          `;
          (document.head || document.documentElement).appendChild(scriptEl);
          scriptEl.remove();
-         console.log(`${logPrefix} Injected successfully.`);
+         // Script injected successfully
        } catch (e) {
          console.error(`${logPrefix} Injection failed:`, e);
        }

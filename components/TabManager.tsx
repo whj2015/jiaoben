@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { TabInfo } from '../types';
 import { getTabs, activateTab, closeTab } from '../services/extensionService';
-import { X, ExternalLink, Globe } from 'lucide-react';
+import { X, Globe } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
 import { escapeHtml } from '../utils/helpers';
 

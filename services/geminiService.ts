@@ -2,13 +2,14 @@ import { GoogleGenAI } from "@google/genai";
 import { getStoredApiKey, getStoredDeepSeekKey, getStoredAIProvider } from "./scriptService";
 import { AIProvider } from "../types";
 
-const MAX_RESPONSE_LENGTH = 100000;
-const REQUEST_TIMEOUT = 60000;
+// 常量定义
+const MAX_RESPONSE_LENGTH = 100000; // 100KB
+const REQUEST_TIMEOUT = 60000; // 60秒
+const MAX_INPUT_LENGTH = 10000;
+const MIN_API_KEY_LENGTH = 10;
+const MAX_OUTPUT_TOKENS = 8192;
 
-interface StreamChunk {
-  text: string;
-  done?: boolean;
-}
+// StreamChunk interface removed as it was unused
 
 class TimeoutError extends Error {
   constructor(message: string) {
@@ -28,7 +29,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 
 function validateApiKey(apiKey: string): boolean {
   if (!apiKey || typeof apiKey !== 'string') return false;
-  if (apiKey.trim().length < 10) return false;
+  if (apiKey.trim().length < MIN_API_KEY_LENGTH) return false;
   return true;
 }
 
@@ -37,15 +38,10 @@ function sanitizeUserInput(input: string): string {
   return input
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
     .trim()
-    .substring(0, 10000);
+    .substring(0, MAX_INPUT_LENGTH);
 }
 
-function escapeHtmlInCode(code: string): string {
-  return code
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
+// escapeHtmlInCode function removed as it was unused
 
 const callGeminiStream = async (
   apiKey: string,
@@ -63,7 +59,7 @@ const callGeminiStream = async (
         contents: userContent,
         config: {
           systemInstruction: systemInstruction,
-          maxOutputTokens: 8192
+          maxOutputTokens: MAX_OUTPUT_TOKENS
         }
       }),
       REQUEST_TIMEOUT
@@ -104,7 +100,7 @@ const callGeminiChatStream = async (
       model: model,
       config: {
         systemInstruction: systemInstruction,
-        maxOutputTokens: 8192
+        maxOutputTokens: MAX_OUTPUT_TOKENS
       }
     });
 

@@ -4,7 +4,7 @@ import ScriptList from './components/ScriptList';
 import ScriptEditor from './components/ScriptEditor';
 import ErrorBoundary from './components/ErrorBoundary';
 import { ViewState, UserScript, Language, AIProvider } from './types';
-import { CheckCircle, Key, Eye, EyeOff, AlertTriangle, Globe, Bot, Database, Upload, Download } from 'lucide-react';
+import { CheckCircle, Eye, EyeOff, AlertTriangle, Globe, Bot, Database, Upload, Download } from 'lucide-react';
 import { 
   getStoredApiKey, setStoredApiKey, 
   getStoredDeepSeekKey, setStoredDeepSeekKey,

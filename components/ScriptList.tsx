@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { UserScript } from '../types';
 import { getScripts, toggleScript, deleteScript, importScripts, exportBackup } from '../services/scriptService';
-import { ToggleLeft, ToggleRight, Edit, Trash2, Box, Upload, Download, FileJson } from 'lucide-react';
+import { ToggleLeft, ToggleRight, Edit, Trash2, Box, Upload, Download } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
 import { escapeHtml } from '../utils/helpers';
 
