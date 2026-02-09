@@ -1,0 +1,14 @@
+{
+  "extensionName": {
+    "message": "EdgeGenius - 脚本管理器",
+    "description": "扩展的名称"
+  },
+  "extensionDescription": {
+    "message": "一个集成了 AI 辅助编程的 Tampermonkey 风格用户脚本管理器。",
+    "description": "扩展的描述"
+  },
+  "actionTitle": {
+    "message": "EdgeGenius 脚本管理器",
+    "description": "浏览器工具栏按钮的标题"
+  }
+}
