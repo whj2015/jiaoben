@@ -3,13 +3,19 @@
   "name": "EdgeGenius - 脚本管理器",
   "version": "2.6.0",
   "description": "一个集成了 AI 辅助编程的 Tampermonkey 风格用户脚本管理器。",
+  "default_locale": "zh_CN",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "action": {
     "default_popup": "index.html",
     "default_title": "EdgeGenius 脚本管理器"
   },
   "background": {
-    "service_worker": "assets/background.js",
-    "type": "module"
+    "service_worker": "assets/background.js"
   },
   "permissions": [
     "storage",
