@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import { useTranslation } from '../utils/i18n';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -68,6 +69,7 @@ const ErrorFallback: React.FC<{
   error: Error | null;
   onReset: () => void;
 }> = ({ error, onReset }) => {
+  const { t } = useTranslation();
   const errorDetails = error ? {
     message: error.message,
     stack: error.stack
@@ -81,18 +83,18 @@ const ErrorFallback: React.FC<{
             <AlertTriangle size={24} className="text-red-600" />
           </div>
           <h2 className="text-xl font-bold text-red-900">
-            Something went wrong
+            {t('errorBoundaryTitle')}
           </h2>
         </div>
         
         <p className="text-red-700 mb-6">
-          An unexpected error occurred. Please try again.
+          {t('errorBoundaryMessage')}
         </p>
 
         {errorDetails && (
           <details className="mb-6">
             <summary className="cursor-pointer text-sm font-medium text-red-600 hover:text-red-800 mb-2">
-              Error Details
+              {t('errorBoundaryDetails')}
             </summary>
             <div className="bg-red-50 rounded-lg p-4 text-xs font-mono text-red-800 max-h-48 overflow-auto">
               <div className="font-bold mb-2">{errorDetails.message}</div>
@@ -110,7 +112,7 @@ const ErrorFallback: React.FC<{
           className="w-full flex items-center justify-center gap-2 bg-red-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-red-700 transition-colors"
         >
           <RefreshCw size={18} />
-          Try Again
+          {t('errorBoundaryRetry')}
         </button>
       </div>
     </div>

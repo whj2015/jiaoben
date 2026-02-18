@@ -219,7 +219,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
   const handleGitHubLogin = async () => {
     if (!gitHubToken.trim()) {
-      setLoginError('请输入 Token');
+      setLoginError(t('gitHubTokenEmpty'));
       return;
     }
 
@@ -231,7 +231,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
       setHasCredentials(true);
       onGitHubLoginSuccess();
     } catch (err) {
-      setLoginError(err instanceof Error ? err.message : 'Token 验证失败');
+      setLoginError(err instanceof Error ? err.message : t('gitHubTokenInvalid'));
     } finally {
       setIsValidating(false);
     }
@@ -303,7 +303,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
             <Cloud size={18} className="text-indigo-600" />
-            <h3 className="font-bold text-sm text-slate-700">GitHub {t('sync') || '同步'}</h3>
+            <h3 className="font-bold text-sm text-slate-700">{t('gitHubSync')}</h3>
           </div>
           <div className="p-4">
             <div className="space-y-4">
@@ -345,16 +345,16 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
             <Github size={18} className="text-slate-700" />
-            <h3 className="font-bold text-sm text-slate-700">GitHub 脚本同步</h3>
+            <h3 className="font-bold text-sm text-slate-700">{t('gitHubSync')}</h3>
           </div>
           <div className="p-4">
             <div className="mb-3 p-3 bg-blue-50 rounded-lg border border-blue-100">
               <div className="flex items-start gap-2">
                 <Key size={16} className="text-blue-500 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-xs text-blue-700 font-medium mb-1">需要 GitHub Personal Access Token</p>
+                  <p className="text-xs text-blue-700 font-medium mb-1">{t('gitHubTokenRequired')}</p>
                   <p className="text-xs text-blue-600">
-                    Token 用于安全访问您的 GitHub 仓库，权限仅限于脚本同步
+                    {t('gitHubTokenDesc')}
                   </p>
                 </div>
               </div>
@@ -422,7 +422,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
 
             <div className="mt-3 pt-3 border-t border-slate-100">
               <p className="text-xs text-slate-400 text-center">
-                连接后可自动创建私有仓库同步脚本
+                {t('gitHubConnectDesc')}
               </p>
             </div>
           </div>

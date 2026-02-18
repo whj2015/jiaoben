@@ -24,14 +24,23 @@
 | **自然语言生成** | 只需描述需求，AI 即可自动编写完整的用户脚本 |
 | **智能修改** | 支持在现有代码基础上进行增量修改，保留原有功能 |
 | **上下文感知** | AI 能感知当前浏览的网页 URL，生成针对特定站点的代码 |
-| **多模型支持** | 内置支持 Google Gemini (`gemini-2.5-flash`) 和 DeepSeek (OpenAI 兼容模式) |
+| **多模型支持** | 内置支持 Google Gemini (`gemini-2.5-flash`) 和 DeepSeek |
+| **流式输出** | 支持流式响应，实时显示 AI 生成的代码 |
+
+### ☁️ GitHub 云同步
+
+- **一键同步**：将本地脚本同步到 GitHub 私有仓库
+- **自动创建仓库**：首次同步自动创建 `jiaoben-scripts` 仓库
+- **双向同步**：支持从 GitHub 下载脚本到本地
+- **安全认证**：使用 Personal Access Token 进行安全认证
 
 ### 📜 强大的脚本管理
 
 - **全功能编辑器**：内置代码编辑器，支持语法高亮
-- **标准 API 支持**：支持 `GM_setValue`, `GM_getValue`, `GM_log`, `GM_xmlhttpRequest` (支持跨域请求) 等常用 API
-- **沙盒执行**：脚本在隔离环境中运行 (IIFE)，互不干扰，同时支持 `MAIN` 世界执行
+- **标准 API 支持**：支持 `GM_setValue`, `GM_getValue`, `GM_log`, `GM_xmlhttpRequest` 等常用 API
+- **沙盒执行**：脚本在隔离环境中运行 (IIFE)，互不干扰
 - **版本控制**：自动保存脚本历史版本，随时回滚
+- **脚本日志**：内置日志查看器，方便调试
 
 ### 🌍 多语言支持
 
@@ -42,19 +51,23 @@
 
 ### 💾 数据安全
 
-- **本地存储**：脚本和配置存储在本地 (Chrome Storage / LocalStorage)
-- **导入/导出**：支持备份所有数据为 JSON 文件，或导出单个 `.user.js` 文件
+- **本地存储**：脚本和配置存储在本地 (Chrome Storage)
+- **导入/导出**：支持备份所有数据为 JSON 文件
+- **加密存储**：敏感数据（如 API Key）支持加密存储
 
 ---
 
 ## 🛠️ 技术栈
 
-- **前端框架**: React 18 + TypeScript
-- **构建工具**: Vite 5
-- **样式方案**: TailwindCSS 3
-- **UI 图标**: Lucide React
-- **AI SDK**: Google GenAI SDK
-- **测试框架**: Vitest + React Testing Library
+| 类别 | 技术 |
+|------|------|
+| 前端框架 | React 18 + TypeScript |
+| 构建工具 | Vite 5 |
+| 样式方案 | TailwindCSS 3 |
+| UI 图标 | Lucide React |
+| AI SDK | Google GenAI SDK |
+| 云同步 | GitHub REST API |
+| 测试框架 | Vitest + React Testing Library |
 
 ---
 
@@ -97,6 +110,8 @@
 
 ## ⚙️ 配置说明
 
+### AI 功能配置
+
 在使用 AI 功能之前，需要配置 API Key：
 
 1. 点击浏览器工具栏中的 EdgeGenius 图标打开扩展
@@ -108,8 +123,17 @@
 
 ### 获取 API Key
 
-- **Google Gemini**: 访问 [Google AI Studio](https://aistudio.google.com/app/apikey) 获取 API Key
-- **DeepSeek**: 访问 [DeepSeek 开放平台](https://platform.deepseek.com/) 获取 API Key
+| 提供商 | 获取地址 |
+|--------|----------|
+| Google Gemini | [Google AI Studio](https://aistudio.google.com/app/apikey) |
+| DeepSeek | [DeepSeek 开放平台](https://platform.deepseek.com/) |
+
+### GitHub 同步配置
+
+1. 在设置页面找到 **GitHub 同步** 区域
+2. 点击 **创建 Token** 链接，创建一个具有 `repo` 和 `user` 权限的 Personal Access Token
+3. 粘贴 Token 并点击 **连接 GitHub**
+4. 连接成功后即可使用云同步功能
 
 ---
 
@@ -118,7 +142,7 @@
 ### 创建新脚本
 
 1. 在首页点击 **"+"** 按钮
-2. 您可以选择手动编写代码，或者点击 **"AI 助手"** 图标
+2. 选择手动编写代码，或点击 **"AI 助手"** 图标
 3. 在 AI 对话框中输入需求，例如：*"为百度首页添加一个夜间模式按钮"*
 4. AI 生成代码后，点击应用即可
 
@@ -166,33 +190,51 @@ npm run test:ui
 
 ```
 jiaoben/
-├── components/          # React 组件
-│   ├── Header.tsx      # 顶部导航栏
-│   ├── ScriptList.tsx  # 脚本列表
-│   ├── ScriptEditor.tsx # 脚本编辑器
-│   ├── AIAssistant.tsx # AI 助手对话框
-│   ├── TabManager.tsx  # 标签页管理器
-│   └── ErrorBoundary.tsx # 错误边界
-├── services/           # 业务逻辑服务
-│   ├── scriptService.ts  # 脚本管理服务
-│   ├── geminiService.ts  # AI 服务
+├── components/              # React 组件
+│   ├── Header.tsx          # 顶部导航栏
+│   ├── ScriptList.tsx      # 脚本列表
+│   ├── ScriptEditor.tsx    # 脚本编辑器
+│   ├── GitHubSync.tsx      # GitHub 同步组件
+│   ├── GitHubUserStatus.tsx # GitHub 用户状态
+│   ├── ScriptLogViewer.tsx # 脚本日志查看器
+│   ├── VirtualList.tsx     # 虚拟列表组件
+│   ├── Toast.tsx           # Toast 通知组件
+│   └── ErrorBoundary.tsx   # 错误边界
+├── services/               # 业务逻辑服务
+│   ├── scriptService.ts    # 脚本管理服务
+│   ├── geminiService.ts    # AI 服务 (Gemini/DeepSeek)
+│   ├── backgroundAI.ts     # 后台 AI 处理服务
+│   ├── githubAuth.ts       # GitHub 认证服务
+│   ├── githubRepo.ts       # GitHub 仓库操作服务
+│   ├── scriptImport.ts     # 脚本导入服务
+│   ├── scriptLogService.ts # 脚本日志服务
 │   └── extensionService.ts # 扩展服务
-├── utils/              # 工具函数
-│   ├── i18n.tsx        # 国际化
-│   ├── helpers.ts      # 辅助函数
-│   ├── logger.ts       # 日志工具
-│   ├── errorHandler.ts # 错误处理
-│   ├── encryption.ts   # 加密工具
-│   └── simpleDiff.ts   # 文本对比
-├── tests/              # 测试文件
-├── types.ts            # TypeScript 类型定义
-├── App.tsx             # 主应用组件
-├── background.ts       # 后台脚本 (Service Worker)
-├── content.ts          # 内容脚本
-├── manifest.json       # 扩展清单
-├── vite.config.ts      # Vite 配置
-├── tailwind.config.js  # TailwindCSS 配置
-└── package.json        # 项目依赖
+├── utils/                  # 工具函数
+│   ├── i18n.tsx           # 国际化
+│   ├── helpers.ts         # 辅助函数
+│   ├── encryption.ts      # 加密工具
+│   ├── simpleDiff.ts      # 文本对比
+│   ├── scriptSecurity.ts  # 脚本安全检查
+│   ├── metadata.ts        # 元数据解析
+│   ├── chromeApi.ts       # Chrome API 封装
+│   └── hooks.ts           # React Hooks
+├── config/                 # 配置文件
+│   └── appConfig.ts       # 应用配置
+├── tests/                  # 测试文件
+├── _locales/               # 国际化资源
+│   ├── zh_CN/             # 简体中文
+│   ├── en/                # English
+│   ├── ja/                # 日本語
+│   └── es/                # Español
+├── icons/                  # 扩展图标
+├── types.ts               # TypeScript 类型定义
+├── App.tsx                # 主应用组件
+├── background.ts          # 后台脚本 (Service Worker)
+├── content.ts             # 内容脚本
+├── manifest.json          # 扩展清单
+├── vite.config.ts         # Vite 配置
+├── tailwind.config.js     # TailwindCSS 配置
+└── package.json           # 项目依赖
 ```
 
 ---
@@ -255,3 +297,4 @@ npm run test:ui
 - [React](https://react.dev/) - 前端框架
 - [Vite](https://vitejs.dev/) - 构建工具
 - [TailwindCSS](https://tailwindcss.com/) - 样式方案
+- [Lucide](https://lucide.dev/) - 图标库

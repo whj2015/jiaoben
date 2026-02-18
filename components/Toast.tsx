@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { CheckCircle, XCircle, AlertCircle, Info, X } from 'lucide-react';
+import { useTranslation } from '../utils/i18n';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -86,6 +87,7 @@ const ConfirmDialog: React.FC<ConfirmState & { onClose: () => void }> = ({
   optionLabel
 }) => {
   const [optionChecked, setOptionChecked] = useState(false);
+  const { t } = useTranslation();
 
   if (!isOpen) return null;
 
@@ -134,13 +136,13 @@ const ConfirmDialog: React.FC<ConfirmState & { onClose: () => void }> = ({
             onClick={handleCancel}
             className="px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
           >
-            取消
+            {t('cancel')}
           </button>
           <button
             onClick={handleConfirm}
             className="px-4 py-2 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
           >
-            确认
+            {t('confirm')}
           </button>
         </div>
       </div>

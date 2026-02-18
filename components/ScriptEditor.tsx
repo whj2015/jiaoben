@@ -240,7 +240,7 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
 
     if (report.riskLevel === 'high' && !localScriptId) {
       showConfirm(
-        `安全警告：${report.warning || '此脚本包含潜在危险操作'}`,
+        `${t('securityWarning')}：${report.warning || t('securityDangerousScript')}`,
         async () => {
           const success = await performInternalSave(code);
           if (success) {
@@ -249,7 +249,7 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
           }
         },
         () => {
-          showToast('已取消保存', 'info');
+          showToast(t('saveCancelled'), 'info');
         }
       );
     } else {

@@ -95,7 +95,7 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
     if (script.isCloudScript && isGitHubAuthed) {
       showConfirmWithOption(
         t('confirmDelete'),
-        t('deleteFromCloud') || '同时删除云端保存的脚本',
+        t('deleteFromCloud'),
         async (deleteFromCloud: boolean) => {
           try {
             await deleteScript(script.id);
@@ -270,9 +270,9 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
                     />
                     <span className="bg-slate-100 text-slate-500 text-[10px] px-1.5 py-0.5 rounded font-mono">v{escapeHtml(script.version)}</span>
                     {script.isCloudScript && (
-                      <span className="flex items-center gap-0.5 text-[10px] text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded" title={t('cloudScript') || '云端脚本'}>
+                      <span className="flex items-center gap-0.5 text-[10px] text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded" title={t('cloudScript')}>
                         <Cloud size={10} />
-                        <span>云端</span>
+                        <span>{t('cloud')}</span>
                       </span>
                     )}
                   </div>

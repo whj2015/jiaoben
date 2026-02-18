@@ -123,6 +123,7 @@ const translations = {
     gitHubImported: 'Imported',
     gitHubUploaded: 'Uploaded',
     gitHubSkipped: 'Skipped',
+    gitHubErrors: 'Errors',
     gitHubRepoCreated: 'Repository created',
     gitHubRepoExists: 'Repository found',
     gitHubNoScripts: 'No scripts to sync',
@@ -136,7 +137,43 @@ const translations = {
     profile: 'Profile',
     confirmLogout: 'Are you sure you want to sign out?',
     cancel: 'Cancel',
-    confirm: 'Confirm'
+    confirm: 'Confirm',
+    
+    // GitHub Token
+    gitHubTokenRequired: 'GitHub Personal Access Token Required',
+    gitHubTokenDesc: 'Token is used to securely access your GitHub repository, permissions are limited to script sync',
+    gitHubTokenLabel: 'Personal Access Token',
+    gitHubTokenPermissions: 'Requires repo and user permissions',
+    gitHubValidating: 'Validating...',
+    gitHubConnect: 'Connect GitHub',
+    gitHubConnectDesc: 'Connect to automatically create a private repository for script sync',
+    gitHubTokenEmpty: 'Please enter Token',
+    gitHubTokenInvalid: 'Token validation failed',
+    gitHubCreatingRepo: 'Creating repository...',
+    gitHubUploadingScripts: 'Uploading local scripts...',
+    gitHubDownloadFailed: 'Download failed',
+    
+    // Cloud
+    cloud: 'Cloud',
+    
+    // Security
+    securityWarning: 'Security Warning',
+    securityDangerousScript: 'This script contains potentially dangerous operations',
+    saveCancelled: 'Save cancelled',
+    
+    // Error Boundary
+    errorBoundaryTitle: 'Something went wrong',
+    errorBoundaryMessage: 'An unexpected error occurred. Please try again.',
+    errorBoundaryDetails: 'Error Details',
+    errorBoundaryRetry: 'Try Again',
+    
+    // AI Progress
+    aiGeneratingProgress: 'AI is generating...',
+    aiGenerateComplete: 'Generation complete',
+    aiGenerateFailed: 'Generation failed',
+    aiGenerateCancelled: 'Cancelled',
+    aiGenerateTimeout: 'Generation timeout',
+    aiUserCancelled: 'User cancelled'
   },
   [Language.ZH_CN]: {
     appTitle: 'EdgeGenius - AI脚本管理器',
@@ -257,6 +294,7 @@ const translations = {
     gitHubImported: '已导入',
     gitHubUploaded: '已上传',
     gitHubSkipped: '已跳过',
+    gitHubErrors: '错误',
     gitHubRepoCreated: '仓库已创建',
     gitHubRepoExists: '仓库已存在',
     gitHubNoScripts: '没有脚本需要同步',
@@ -270,7 +308,43 @@ const translations = {
     profile: '主页',
     confirmLogout: '确定要退出登录吗？',
     cancel: '取消',
-    confirm: '确定'
+    confirm: '确定',
+    
+    // GitHub Token
+    gitHubTokenRequired: '需要 GitHub Personal Access Token',
+    gitHubTokenDesc: 'Token 用于安全访问您的 GitHub 仓库，权限仅限于脚本同步',
+    gitHubTokenLabel: 'Personal Access Token',
+    gitHubTokenPermissions: '需要勾选 repo 和 user 权限',
+    gitHubValidating: '验证中...',
+    gitHubConnect: '连接 GitHub',
+    gitHubConnectDesc: '连接后可自动创建私有仓库同步脚本',
+    gitHubTokenEmpty: '请输入 Token',
+    gitHubTokenInvalid: 'Token 验证失败',
+    gitHubCreatingRepo: '正在创建仓库...',
+    gitHubUploadingScripts: '正在上传本地脚本...',
+    gitHubDownloadFailed: '下载失败',
+    
+    // Cloud
+    cloud: '云端',
+    
+    // Security
+    securityWarning: '安全警告',
+    securityDangerousScript: '此脚本包含潜在危险操作',
+    saveCancelled: '已取消保存',
+    
+    // Error Boundary
+    errorBoundaryTitle: '出错了',
+    errorBoundaryMessage: '发生了意外错误，请重试。',
+    errorBoundaryDetails: '错误详情',
+    errorBoundaryRetry: '重试',
+    
+    // AI Progress
+    aiGeneratingProgress: 'AI 正在生成...',
+    aiGenerateComplete: '生成完成',
+    aiGenerateFailed: '生成失败',
+    aiGenerateCancelled: '已取消',
+    aiGenerateTimeout: '生成超时',
+    aiUserCancelled: '用户取消'
   },
   [Language.JA]: {
     appTitle: 'EdgeGenius - AIスクリプトマネージャー',
@@ -401,7 +475,43 @@ const translations = {
     profile: 'プロフィール',
     confirmLogout: 'ログアウトしますか？',
     cancel: 'キャンセル',
-    confirm: '確認'
+    confirm: '確認',
+    
+    // GitHub Token
+    gitHubTokenRequired: 'GitHub Personal Access Token が必要です',
+    gitHubTokenDesc: 'Token は GitHub リポジトリへの安全なアクセスに使用されます',
+    gitHubTokenLabel: 'Personal Access Token',
+    gitHubTokenPermissions: 'repo と user 権限が必要です',
+    gitHubValidating: '検証中...',
+    gitHubConnect: 'GitHub に接続',
+    gitHubConnectDesc: '接続すると自動的にプライベートリポジトリが作成されます',
+    gitHubTokenEmpty: 'Token を入力してください',
+    gitHubTokenInvalid: 'Token 検証に失敗しました',
+    gitHubCreatingRepo: 'リポジトリ作成中...',
+    gitHubUploadingScripts: 'ローカルスクリプトをアップロード中...',
+    gitHubDownloadFailed: 'ダウンロード失敗',
+    
+    // Cloud
+    cloud: 'クラウド',
+    
+    // Security
+    securityWarning: 'セキュリティ警告',
+    securityDangerousScript: 'このスクリプトは潜在的に危険な操作を含んでいます',
+    saveCancelled: '保存がキャンセルされました',
+    
+    // Error Boundary
+    errorBoundaryTitle: 'エラーが発生しました',
+    errorBoundaryMessage: '予期しないエラーが発生しました。もう一度お試しください。',
+    errorBoundaryDetails: 'エラー詳細',
+    errorBoundaryRetry: '再試行',
+    
+    // AI Progress
+    aiGeneratingProgress: 'AI 生成中...',
+    aiGenerateComplete: '生成完了',
+    aiGenerateFailed: '生成失敗',
+    aiGenerateCancelled: 'キャンセル済',
+    aiGenerateTimeout: '生成タイムアウト',
+    aiUserCancelled: 'ユーザーがキャンセル'
   },
   [Language.ES]: {
     appTitle: 'EdgeGenius - Gestor de Scripts AI',
@@ -519,6 +629,7 @@ const translations = {
     gitHubImported: 'Importados',
     gitHubUploaded: 'Subidos',
     gitHubSkipped: 'Omitidos',
+    gitHubErrors: 'Errores',
     gitHubRepoCreated: 'Repositorio creado',
     gitHubRepoExists: 'Repositorio encontrado',
     gitHubNoScripts: 'Sin scripts para sincronizar',
@@ -532,7 +643,43 @@ const translations = {
     profile: 'Perfil',
     confirmLogout: '¿Cerrar sesión?',
     cancel: 'Cancelar',
-    confirm: 'Confirmar'
+    confirm: 'Confirmar',
+    
+    // GitHub Token
+    gitHubTokenRequired: 'Se requiere GitHub Personal Access Token',
+    gitHubTokenDesc: 'El Token se usa para acceder de forma segura a tu repositorio de GitHub',
+    gitHubTokenLabel: 'Personal Access Token',
+    gitHubTokenPermissions: 'Requiere permisos repo y user',
+    gitHubValidating: 'Validando...',
+    gitHubConnect: 'Conectar GitHub',
+    gitHubConnectDesc: 'Conecta para crear automáticamente un repositorio privado',
+    gitHubTokenEmpty: 'Por favor ingresa el Token',
+    gitHubTokenInvalid: 'Validación de Token fallida',
+    gitHubCreatingRepo: 'Creando repositorio...',
+    gitHubUploadingScripts: 'Subiendo scripts locales...',
+    gitHubDownloadFailed: 'Descarga fallida',
+    
+    // Cloud
+    cloud: 'Nube',
+    
+    // Security
+    securityWarning: 'Advertencia de Seguridad',
+    securityDangerousScript: 'Este script contiene operaciones potencialmente peligrosas',
+    saveCancelled: 'Guardado cancelado',
+    
+    // Error Boundary
+    errorBoundaryTitle: 'Algo salió mal',
+    errorBoundaryMessage: 'Ocurrió un error inesperado. Por favor intenta de nuevo.',
+    errorBoundaryDetails: 'Detalles del Error',
+    errorBoundaryRetry: 'Intentar de Nuevo',
+    
+    // AI Progress
+    aiGeneratingProgress: 'AI está generando...',
+    aiGenerateComplete: 'Generación completa',
+    aiGenerateFailed: 'Generación fallida',
+    aiGenerateCancelled: 'Cancelado',
+    aiGenerateTimeout: 'Tiempo de espera agotado',
+    aiUserCancelled: 'Usuario canceló'
   }
 };
 

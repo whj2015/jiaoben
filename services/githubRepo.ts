@@ -327,54 +327,69 @@ export async function uploadAllScripts(
       const fileName = `${script.name.replace(/[^a-zA-Z0-9_\-\u4e00-\u9fa5]/g, '_')}.user.js`;
       const path = fileName;
 
-      let existingSha: string | undefined;
-      try {
-        const response = await fetch(`${GITHUB_API_BASE}/repos/${repoOwner}/${repoName}/contents/${path}`, {
-          method: 'GET',
-          headers: createHeaders(accessToken)
-        });
-        
-        if (response.ok) {
-          const existingFile = await response.json() as GitHubContent;
-          if (existingFile && existingFile.sha) {
-            existingSha = existingFile.sha;
+      const getExistingFileSha = async (): Promise<string | null> => {
+        try {
+          const response = await fetch(`${GITHUB_API_BASE}/repos/${repoOwner}/${repoName}/contents/${path}`, {
+            method: 'GET',
+            headers: createHeaders(accessToken)
+          });
+          
+          if (response.ok) {
+            const existingFile = await response.json() as GitHubContent;
+            return existingFile?.sha || null;
           }
+          return null;
+        } catch {
+          return null;
         }
-      } catch {
-        // File doesn't exist, which is fine
-      }
-
-      const message = existingSha 
-        ? `Update script: ${script.name}` 
-        : `Add script: ${script.name}`;
-
-      const body: Record<string, string> = {
-        message,
-        content: toBase64(script.code)
       };
 
-      if (existingSha) {
-        body.sha = existingSha;
-      }
+      const uploadWithSha = async (sha: string | null): Promise<{ success: boolean; error?: string; needRetry?: boolean }> => {
+        const message = sha 
+          ? `Update script: ${script.name}` 
+          : `Add script: ${script.name}`;
 
-      const uploadResponse = await fetch(`${GITHUB_API_BASE}/repos/${repoOwner}/${repoName}/contents/${path}`, {
-        method: 'PUT',
-        headers: createHeaders(accessToken),
-        body: JSON.stringify(body)
-      });
+        const body: Record<string, string> = {
+          message,
+          content: toBase64(script.code)
+        };
 
-      if (!uploadResponse.ok) {
-        let errorMsg = `HTTP ${uploadResponse.status}`;
-        try {
-          const errorData = await uploadResponse.json();
-          errorMsg = errorData.message || errorMsg;
-        } catch {
-          // Ignore
+        if (sha) {
+          body.sha = sha;
         }
-        return { success: false, error: errorMsg };
+
+        const uploadResponse = await fetch(`${GITHUB_API_BASE}/repos/${repoOwner}/${repoName}/contents/${path}`, {
+          method: 'PUT',
+          headers: createHeaders(accessToken),
+          body: JSON.stringify(body)
+        });
+
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json().catch(() => ({}));
+          const errorMsg = errorData.message || `HTTP ${uploadResponse.status}`;
+          
+          if (uploadResponse.status === 409 || 
+              (uploadResponse.status === 422 && errorMsg.includes('sha'))) {
+            return { success: false, error: errorMsg, needRetry: true };
+          }
+          
+          return { success: false, error: errorMsg };
+        }
+
+        return { success: true };
+      };
+
+      let existingSha = await getExistingFileSha();
+      let result = await uploadWithSha(existingSha);
+      
+      if (result.needRetry) {
+        existingSha = await getExistingFileSha();
+        if (existingSha) {
+          result = await uploadWithSha(existingSha);
+        }
       }
 
-      return { success: true };
+      return { success: result.success, error: result.error };
     };
 
     const chunks: typeof scripts[][] = [];
@@ -483,54 +498,70 @@ export async function uploadSingleScript(
     const fileName = `${script.name.replace(/[^a-zA-Z0-9_\-\u4e00-\u9fa5]/g, '_')}.user.js`;
     const path = fileName;
 
-    let existingSha: string | undefined;
-    try {
-      const response = await fetch(`${GITHUB_API_BASE}/repos/${repoOwner}/${repoName}/contents/${path}`, {
-        method: 'GET',
-        headers: createHeaders(accessToken)
-      });
-      
-      if (response.ok) {
-        const existingFile = await response.json() as GitHubContent;
-        if (existingFile && existingFile.sha) {
-          existingSha = existingFile.sha;
+    const getExistingFileSha = async (): Promise<string | null> => {
+      try {
+        const response = await fetch(`${GITHUB_API_BASE}/repos/${repoOwner}/${repoName}/contents/${path}`, {
+          method: 'GET',
+          headers: createHeaders(accessToken)
+        });
+        
+        if (response.ok) {
+          const existingFile = await response.json() as GitHubContent;
+          return existingFile?.sha || null;
         }
+        return null;
+      } catch {
+        return null;
       }
-    } catch {
-      // File doesn't exist, which is fine
-    }
-
-    const message = existingSha 
-      ? `Update script: ${script.name}` 
-      : `Add script: ${script.name}`;
-
-    const body: Record<string, string> = {
-      message,
-      content: toBase64(script.code)
     };
 
-    if (existingSha) {
-      body.sha = existingSha;
-    }
+    let existingSha = await getExistingFileSha();
 
-    const uploadResponse = await fetch(`${GITHUB_API_BASE}/repos/${repoOwner}/${repoName}/contents/${path}`, {
-      method: 'PUT',
-      headers: createHeaders(accessToken),
-      body: JSON.stringify(body)
-    });
+    const uploadWithSha = async (sha: string | null): Promise<{ success: boolean; error?: string; needRetry?: boolean }> => {
+      const message = sha 
+        ? `Update script: ${script.name}` 
+        : `Add script: ${script.name}`;
 
-    if (!uploadResponse.ok) {
-      let errorMsg = `HTTP ${uploadResponse.status}`;
-      try {
-        const errorData = await uploadResponse.json();
-        errorMsg = errorData.message || errorMsg;
-      } catch {
-        // Ignore
+      const body: Record<string, string> = {
+        message,
+        content: toBase64(script.code)
+      };
+
+      if (sha) {
+        body.sha = sha;
       }
-      return { success: false, error: errorMsg };
+
+      const uploadResponse = await fetch(`${GITHUB_API_BASE}/repos/${repoOwner}/${repoName}/contents/${path}`, {
+        method: 'PUT',
+        headers: createHeaders(accessToken),
+        body: JSON.stringify(body)
+      });
+
+      if (!uploadResponse.ok) {
+        const errorData = await uploadResponse.json().catch(() => ({}));
+        const errorMsg = errorData.message || `HTTP ${uploadResponse.status}`;
+        
+        if (uploadResponse.status === 409 || 
+            (uploadResponse.status === 422 && errorMsg.includes('sha'))) {
+          return { success: false, error: errorMsg, needRetry: true };
+        }
+        
+        return { success: false, error: errorMsg };
+      }
+
+      return { success: true };
+    };
+
+    let result = await uploadWithSha(existingSha);
+    
+    if (result.needRetry) {
+      existingSha = await getExistingFileSha();
+      if (existingSha) {
+        result = await uploadWithSha(existingSha);
+      }
     }
 
-    return { success: true };
+    return { success: result.success, error: result.error };
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Unknown error';
     console.error(`[GitHubRepo] Failed to upload script '${script.name}':`, error);
