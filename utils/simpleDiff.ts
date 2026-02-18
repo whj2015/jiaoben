@@ -1,24 +1,140 @@
-
 export interface DiffLine {
   value: string;
   added?: boolean;
   removed?: boolean;
 }
 
-/**
- * 计算两个文本之间的行级差异 (基于 LCS 算法的简化实现)
- */
+export interface ProcessedDiffBlock {
+  type: 'diff' | 'collapsed';
+  lines: DiffLine[];
+}
+
+function myersDiff(a: string[], b: string[]): Array<{ op: 'equal' | 'delete' | 'insert'; value: string }> {
+  const n = a.length;
+  const m = b.length;
+  
+  if (n === 0 && m === 0) return [];
+  if (n === 0) return b.map(line => ({ op: 'insert' as const, value: line }));
+  if (m === 0) return a.map(line => ({ op: 'delete' as const, value: line }));
+
+  const max = n + m;
+  const v: number[] = new Array(2 * max + 1);
+  const trace: number[][] = [];
+  
+  v[max + 1] = 0;
+  
+  for (let d = 0; d <= max; d++) {
+    trace.push([...v]);
+    
+    for (let k = -d; k <= d; k += 2) {
+      const vk = max + k;
+      let x: number;
+      
+      if (k === -d || (k !== d && v[vk - 1] < v[vk + 1])) {
+        x = v[vk + 1];
+      } else {
+        x = v[vk - 1] + 1;
+      }
+      
+      let y = x - k;
+      
+      while (x < n && y < m && a[x] === b[y]) {
+        x++;
+        y++;
+      }
+      
+      v[vk] = x;
+      
+      if (x >= n && y >= m) {
+        return backtrack(trace, a, b, d, max);
+      }
+    }
+  }
+  
+  return [];
+}
+
+function backtrack(
+  trace: number[][],
+  a: string[],
+  b: string[],
+  d: number,
+  max: number
+): Array<{ op: 'equal' | 'delete' | 'insert'; value: string }> {
+  const result: Array<{ op: 'equal' | 'delete' | 'insert'; value: string }> = [];
+  let x = a.length;
+  let y = b.length;
+  
+  for (let currentD = d; currentD > 0; currentD--) {
+    const v = trace[currentD];
+    const k = x - y;
+    const vk = max + k;
+    
+    let prevK: number;
+    if (k === -currentD || (k !== currentD && v[vk - 1] < v[vk + 1])) {
+      prevK = k + 1;
+    } else {
+      prevK = k - 1;
+    }
+    
+    const prevX = v[max + prevK];
+    const prevY = prevX - prevK;
+    
+    while (x > prevX && y > prevY) {
+      x--;
+      y--;
+      result.unshift({ op: 'equal', value: a[x] });
+    }
+    
+    if (currentD > 0) {
+      if (x === prevX) {
+        y--;
+        result.unshift({ op: 'insert', value: b[y] });
+      } else {
+        x--;
+        result.unshift({ op: 'delete', value: a[x] });
+      }
+    }
+  }
+  
+  return result;
+}
+
 export const diffLines = (text1: string, text2: string): DiffLine[] => {
   const lines1 = text1.split('\n');
   const lines2 = text2.split('\n');
+  
+  const rawDiff = myersDiff(lines1, lines2);
+  
+  const result: DiffLine[] = [];
+  
+  for (const item of rawDiff) {
+    if (item.op === 'equal') {
+      result.push({ value: item.value });
+    } else if (item.op === 'delete') {
+      result.push({ value: item.value, removed: true });
+    } else {
+      result.push({ value: item.value, added: true });
+    }
+  }
+  
+  return result;
+};
+
+export const diffLinesLCS = (text1: string, text2: string): DiffLine[] => {
+  const lines1 = text1.split('\n');
+  const lines2 = text2.split('\n');
+  
+  if (lines1.length > 1000 || lines2.length > 1000) {
+    return diffLines(text1, text2);
+  }
+  
   const matrix: number[][] = [];
 
-  // 初始化矩阵
   for (let i = 0; i <= lines1.length; i++) {
     matrix[i] = new Array(lines2.length + 1).fill(0);
   }
 
-  // 填充矩阵
   for (let i = 1; i <= lines1.length; i++) {
     for (let j = 1; j <= lines2.length; j++) {
       if (lines1[i - 1] === lines2[j - 1]) {
@@ -29,7 +145,6 @@ export const diffLines = (text1: string, text2: string): DiffLine[] => {
     }
   }
 
-  // 回溯生成 Diff
   const diff: DiffLine[] = [];
   let i = lines1.length;
   let j = lines2.length;
@@ -51,16 +166,6 @@ export const diffLines = (text1: string, text2: string): DiffLine[] => {
   return diff;
 };
 
-export interface ProcessedDiffBlock {
-  type: 'diff' | 'collapsed';
-  lines: DiffLine[];
-}
-
-/**
- * 处理 Diff 结果，将过长的未修改代码折叠
- * @param diff 原始 Diff 数组
- * @param contextLines 保留上下文行数 (默认 3 行)
- */
 export const processDiffWithContext = (diff: DiffLine[], contextLines = 3): ProcessedDiffBlock[] => {
   const blocks: ProcessedDiffBlock[] = [];
   let currentChunk: DiffLine[] = [];
@@ -70,21 +175,14 @@ export const processDiffWithContext = (diff: DiffLine[], contextLines = 3): Proc
     const line = diff[i];
     
     if (line.added || line.removed) {
-      // 遇到变更，检查之前的未变更行是否需要折叠
       if (unchangedCount > contextLines * 2) {
-        // 如果未变更行太多，进行折叠
-        
-        // 1. 这一块之前的 context
         const preContext = currentChunk.slice(0, currentChunk.length - unchangedCount + contextLines);
-        // 2. 中间要被折叠的部分
         const collapsedLines = currentChunk.slice(currentChunk.length - unchangedCount + contextLines, currentChunk.length - contextLines);
-        // 3. 紧接在变更之前的 context
         const postContext = currentChunk.slice(currentChunk.length - contextLines);
 
         if (preContext.length) blocks.push({ type: 'diff', lines: preContext });
         if (collapsedLines.length) blocks.push({ type: 'collapsed', lines: collapsedLines });
         
-        // postContext 是新块的开始
         currentChunk = [...postContext, line]; 
       } else {
         currentChunk.push(line);
@@ -96,9 +194,7 @@ export const processDiffWithContext = (diff: DiffLine[], contextLines = 3): Proc
     }
   }
 
-  // 处理剩余部分
   if (unchangedCount > contextLines * 2 && blocks.length > 0) {
-    // 结尾如果太长也折叠 (保留开头的 context)
     const preContext = currentChunk.slice(0, contextLines);
     const collapsedLines = currentChunk.slice(contextLines);
     
@@ -110,3 +206,17 @@ export const processDiffWithContext = (diff: DiffLine[], contextLines = 3): Proc
 
   return blocks;
 };
+
+export function getDiffStats(diff: DiffLine[]): { added: number; removed: number; unchanged: number } {
+  let added = 0;
+  let removed = 0;
+  let unchanged = 0;
+  
+  for (const line of diff) {
+    if (line.added) added++;
+    else if (line.removed) removed++;
+    else unchanged++;
+  }
+  
+  return { added, removed, unchanged };
+}

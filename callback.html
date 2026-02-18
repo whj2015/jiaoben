@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GitHub OAuth 回调</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+    }
+    .container {
+      text-align: center;
+      padding: 40px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+      max-width: 400px;
+      width: 90%;
+    }
+    .loading {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    .spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid rgba(255, 255, 255, 0.3);
+      border-top-color: #58a6ff;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .loading-text {
+      font-size: 18px;
+      color: #e6e6e6;
+    }
+    .success {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .success-icon {
+      width: 64px;
+      height: 64px;
+      background: #238636;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .success-icon svg {
+      width: 32px;
+      height: 32px;
+      fill: #fff;
+    }
+    .success-text {
+      font-size: 18px;
+      color: #3fb950;
+    }
+    .user-info {
+      font-size: 14px;
+      color: #8b949e;
+      margin-top: 8px;
+    }
+    .error {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .error-icon {
+      width: 64px;
+      height: 64px;
+      background: #da3633;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .error-icon svg {
+      width: 32px;
+      height: 32px;
+      fill: #fff;
+    }
+    .error-text {
+      font-size: 16px;
+      color: #f85149;
+    }
+    .error-detail {
+      font-size: 13px;
+      color: #8b949e;
+      max-width: 300px;
+      word-break: break-word;
+    }
+    .retry-btn {
+      margin-top: 16px;
+      padding: 10px 24px;
+      background: #238636;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .retry-btn:hover {
+      background: #2ea043;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="loading" id="loading">
+      <div class="spinner"></div>
+      <div class="loading-text">正在登录...</div>
+    </div>
+    
+    <div class="success" id="success">
+      <div class="success-icon">
+        <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+      </div>
+      <div class="success-text">登录成功!</div>
+      <div class="user-info" id="user-info"></div>
+    </div>
+    
+    <div class="error" id="error">
+      <div class="error-icon">
+        <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+      </div>
+      <div class="error-text">登录失败</div>
+      <div class="error-detail" id="error-detail"></div>
+      <button class="retry-btn" id="retry-btn">重新登录</button>
+    </div>
+  </div>
+  
+  <script src="callback.js"></script>
+</body>
+</html>

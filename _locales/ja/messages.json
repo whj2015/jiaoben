@@ -1,0 +1,14 @@
+{
+  "extensionName": {
+    "message": "EdgeGenius - AIスクリプトマネージャー",
+    "description": "拡張機能の名前"
+  },
+  "extensionDescription": {
+    "message": "AI支援プログラミングを統合したTampermonkeyスタイルのユーザースクリプトマネージャー。",
+    "description": "拡張機能の説明"
+  },
+  "actionTitle": {
+    "message": "EdgeGenius AIスクリプトマネージャー",
+    "description": "ブラウザツールバーボタンのタイトル"
+  }
+}

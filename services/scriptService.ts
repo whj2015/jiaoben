@@ -1,21 +1,14 @@
-import { UserScript, ScriptMetadata, Language, AIProvider, ScriptVersion } from '../types';
-import { escapeHtml, validateFilename, validateScriptCode as validateCode } from '../utils/helpers';
+import { UserScript, Language, AIProvider, ScriptVersion } from '../types';
+import { validateFilename, validateScriptCode as validateCode } from '../utils/helpers';
 import { encryptText, decryptText } from '../utils/encryption';
-
-interface ChromeStorage {
-  local: {
-    get: (keys: string[], callback: (result: Record<string, unknown>) => void) => void;
-    set: (items: Record<string, unknown>, callback?: () => void) => void;
-  };
-  sync: {
-    get: (keys: string[], callback: (result: Record<string, unknown>) => void) => void;
-    set: (items: Record<string, unknown>, callback?: () => void) => void;
-  };
-}
-
-declare var chrome: { storage: ChromeStorage; tabs?: { query: (queryInfo: chrome.tabs.QueryInfo, callback: (tabs: chrome.tabs.Tab[]) => void) => void } };
-
-const isExtensionEnv = typeof chrome !== 'undefined' && !!chrome.storage;
+import { parseScriptMetadata } from '../utils/metadata';
+import { 
+  isExtensionEnv, 
+  chromeStorageGet, 
+  chromeStorageSet, 
+  chromeStorageSyncGet, 
+  chromeStorageSyncSet 
+} from '../utils/chromeApi';
 
 const MAX_SCRIPT_SIZE = 1024 * 1024;
 const MAX_SCRIPT_NAME_LENGTH = 200;
@@ -50,61 +43,19 @@ export const DEFAULT_SCRIPT_TEMPLATE = `// ==UserScript==
     // 在此处编写代码...
 })();`;
 
-export const parseMetadata = (code: string): ScriptMetadata => {
-  const metadata: ScriptMetadata = {
-    name: '无标题脚本',
-    match: [],
-    exclude: []
-  };
-
-  const metaBlockRegex = /\/\/ ==UserScript==([\s\S]*?)\/\/ ==\/UserScript==/;
-  const match = code.match(metaBlockRegex);
-
-  if (match) {
-    const content = match[1];
-    const lines = content.split('\n');
-    
-    lines.forEach(line => {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith('// @')) return;
-
-      const parts = trimmed.substring(4).split(/\s+/);
-      const key = parts[0];
-      const value = parts.slice(1).join(' ');
-
-      if (key === 'name') metadata.name = escapeHtml(value);
-      else if (key === 'namespace') metadata.namespace = value;
-      else if (key === 'version') metadata.version = escapeHtml(value);
-      else if (key === 'description') metadata.description = escapeHtml(value);
-      else if (key === 'author') metadata.author = value;
-      else if (key === 'match') metadata.match.push(escapeHtml(value));
-      else if (key === 'exclude') metadata.exclude.push(escapeHtml(value));
-      else if (key === 'run-at') metadata.runAt = value;
-    });
-  }
-
-  return metadata;
-};
+export const parseMetadata = parseScriptMetadata;
 
 export const getScripts = async (): Promise<UserScript[]> => {
   try {
-    if (isExtensionEnv) {
-      return new Promise((resolve) => {
-        chrome.storage.local.get(['user_scripts'], (result: Record<string, unknown>) => {
-          resolve((result.user_scripts as UserScript[]) || []);
-        });
-      });
-    } else {
-      const stored = localStorage.getItem('user_scripts');
-      return stored ? JSON.parse(stored) as UserScript[] : [];
-    }
+    const result = await chromeStorageGet<UserScript[]>(['user_scripts']);
+    return result.user_scripts || [];
   } catch (error) {
     console.error('[ScriptService] Failed to get scripts:', error);
     return [];
   }
 };
 
-export const saveScript = async (script: UserScript): Promise<void> => {
+export const saveScript = async (script: UserScript, skipAutoSync: boolean = false): Promise<void> => {
   if (!validateScriptName(script.name)) {
     throw new Error('Invalid script name');
   }
@@ -149,14 +100,44 @@ export const saveScript = async (script: UserScript): Promise<void> => {
   }
 
   try {
-    if (isExtensionEnv) {
-      await chrome.storage.local.set({ user_scripts: scripts });
-    } else {
-      localStorage.setItem('user_scripts', JSON.stringify(scripts));
-    }
+    await chromeStorageSet({ user_scripts: scripts });
   } catch (error) {
     console.error('[ScriptService] Failed to save script:', error);
     throw new Error('Failed to save script');
+  }
+
+  if (!skipAutoSync) {
+    autoSyncScriptToGitHub(script).catch(err => {
+      console.warn('[ScriptService] Auto sync to GitHub failed:', err);
+    });
+  }
+};
+
+const autoSyncScriptToGitHub = async (script: UserScript): Promise<void> => {
+  try {
+    const autoSyncEnabled = await getAutoSyncToGitHub();
+    if (!autoSyncEnabled) {
+      return;
+    }
+
+    const { isGitHubAuthenticated } = await import('./githubAuth');
+    const isAuthenticated = await isGitHubAuthenticated();
+    if (!isAuthenticated) {
+      console.log('[ScriptService] GitHub not authenticated, skipping auto sync');
+      return;
+    }
+
+    const { ensureRepoExists, uploadSingleScript } = await import('./githubRepo');
+    await ensureRepoExists();
+    
+    const result = await uploadSingleScript({ name: script.name, code: script.code });
+    if (result.success) {
+      console.log(`[ScriptService] Auto synced script '${script.name}' to GitHub`);
+    } else {
+      console.warn(`[ScriptService] Failed to auto sync script '${script.name}':`, result.error);
+    }
+  } catch (error) {
+    console.warn('[ScriptService] Auto sync to GitHub failed:', error);
   }
 };
 
@@ -164,12 +145,7 @@ export const deleteScript = async (id: string): Promise<void> => {
   try {
     let scripts = await getScripts();
     scripts = scripts.filter(s => s.id !== id);
-
-    if (isExtensionEnv) {
-      await chrome.storage.local.set({ user_scripts: scripts });
-    } else {
-      localStorage.setItem('user_scripts', JSON.stringify(scripts));
-    }
+    await chromeStorageSet({ user_scripts: scripts });
   } catch (error) {
     console.error('[ScriptService] Failed to delete script:', error);
     throw new Error('Failed to delete script');
@@ -185,11 +161,7 @@ export const toggleScript = async (id: string, enabled: boolean): Promise<void> 
       const index = scripts.findIndex(s => s.id === id);
       if (index >= 0) {
         scripts[index] = script;
-        if (isExtensionEnv) {
-          await chrome.storage.local.set({ user_scripts: scripts });
-        } else {
-          localStorage.setItem('user_scripts', JSON.stringify(scripts));
-        }
+        await chromeStorageSet({ user_scripts: scripts });
       }
     }
   } catch (error) {
@@ -208,11 +180,7 @@ export const clearScriptHistory = async (id: string): Promise<void> => {
       const index = scripts.findIndex(s => s.id === id);
       if (index >= 0) {
         scripts[index] = script;
-        if (isExtensionEnv) {
-          await chrome.storage.local.set({ user_scripts: scripts });
-        } else {
-          localStorage.setItem('user_scripts', JSON.stringify(scripts));
-        }
+        await chromeStorageSet({ user_scripts: scripts });
       }
     }
   } catch (error) {
@@ -231,11 +199,7 @@ export const deleteScriptVersion = async (scriptId: string, timestamp: number): 
       const index = scripts.findIndex(s => s.id === scriptId);
       if (index >= 0) {
         scripts[index] = script;
-        if (isExtensionEnv) {
-          await chrome.storage.local.set({ user_scripts: scripts });
-        } else {
-          localStorage.setItem('user_scripts', JSON.stringify(scripts));
-        }
+        await chromeStorageSet({ user_scripts: scripts });
       }
     }
   } catch (error) {
@@ -255,7 +219,7 @@ export const createScriptFromCode = (code: string, id?: string): UserScript => {
     exclude: meta.exclude,
     code: code,
     enabled: true,
-    runAt: (meta.runAt as any) || 'document-idle',
+    runAt: (meta.runAt as UserScript['runAt']) || 'document-idle',
     updatedAt: Date.now(),
     history: []
   };
@@ -336,8 +300,14 @@ export const importScripts = async (file: File): Promise<number> => {
           for (const s of scriptsToImport) {
             if (!s.id) s.id = Date.now().toString() + Math.random().toString().slice(2, 6);
             s.updatedAt = Date.now();
-            await saveScript(s);
+            await saveScript(s, true);
             count++;
+          }
+          
+          if (count > 0) {
+            autoSyncAllScriptsToGitHub().catch(err => {
+              console.warn('[ScriptService] Auto sync all scripts to GitHub failed:', err);
+            });
           }
         } else {
           const script = createScriptFromCode(content);
@@ -355,46 +325,53 @@ export const importScripts = async (file: File): Promise<number> => {
   });
 };
 
-export const getStoredApiKey = async (): Promise<string> => {
-    try {
-      if (isExtensionEnv) {
-        return new Promise((resolve) => {
-          const storage = chrome.storage.sync || chrome.storage.local;
-          storage.get(['gemini_api_key'], async (result: Record<string, unknown>) => {
-            const encrypted = (result.gemini_api_key as string) || '';
-            if (encrypted) {
-              const decrypted = await decryptText(encrypted);
-              resolve(decrypted);
-            } else {
-              resolve('');
-            }
-          });
-        });
-      } else {
-        const encrypted = localStorage.getItem('gemini_api_key') || '';
-        if (encrypted) {
-          return await decryptText(encrypted);
-        }
-        return '';
-      }
-    } catch (error) {
-      console.error('[ScriptService] Failed to get API key:', error);
-      return '';
+const autoSyncAllScriptsToGitHub = async (): Promise<void> => {
+  try {
+    const autoSyncEnabled = await getAutoSyncToGitHub();
+    if (!autoSyncEnabled) {
+      return;
     }
+
+    const { isGitHubAuthenticated } = await import('./githubAuth');
+    const isAuthenticated = await isGitHubAuthenticated();
+    if (!isAuthenticated) {
+      console.log('[ScriptService] GitHub not authenticated, skipping auto sync');
+      return;
+    }
+
+    const { uploadAllScripts, ensureRepoExists } = await import('./githubRepo');
+    await ensureRepoExists();
+    
+    const result = await uploadAllScripts();
+    if (result.uploaded > 0) {
+      console.log(`[ScriptService] Auto synced ${result.uploaded} scripts to GitHub`);
+    }
+    if (result.errors.length > 0) {
+      console.warn('[ScriptService] Some scripts failed to sync:', result.errors);
+    }
+  } catch (error) {
+    console.warn('[ScriptService] Auto sync all scripts to GitHub failed:', error);
+  }
+};
+
+export const getStoredApiKey = async (): Promise<string> => {
+  try {
+    const result = await chromeStorageSyncGet<string>(['gemini_api_key']);
+    const encrypted = result.gemini_api_key || '';
+    if (encrypted) {
+      return await decryptText(encrypted);
+    }
+    return '';
+  } catch (error) {
+    console.error('[ScriptService] Failed to get API key:', error);
+    return '';
+  }
 };
   
 export const setStoredApiKey = async (apiKey: string): Promise<void> => {
   try {
     const encrypted = await encryptText(apiKey);
-    if (isExtensionEnv) {
-      return new Promise((resolve) => {
-        const storage = chrome.storage.sync || chrome.storage.local;
-        storage.set({ gemini_api_key: encrypted }, resolve);
-      });
-    } else {
-      localStorage.setItem('gemini_api_key', encrypted);
-      return Promise.resolve();
-    }
+    await chromeStorageSyncSet({ gemini_api_key: encrypted });
   } catch (error) {
     console.error('[ScriptService] Failed to set API key:', error);
     throw new Error('Failed to save API key');
@@ -403,26 +380,12 @@ export const setStoredApiKey = async (apiKey: string): Promise<void> => {
 
 export const getStoredDeepSeekKey = async (): Promise<string> => {
   try {
-    if (isExtensionEnv) {
-      return new Promise((resolve) => {
-        const storage = chrome.storage.sync || chrome.storage.local;
-        storage.get(['deepseek_api_key'], async (result: Record<string, unknown>) => {
-          const encrypted = (result.deepseek_api_key as string) || '';
-          if (encrypted) {
-            const decrypted = await decryptText(encrypted);
-            resolve(decrypted);
-          } else {
-            resolve('');
-          }
-        });
-      });
-    } else {
-      const encrypted = localStorage.getItem('deepseek_api_key') || '';
-      if (encrypted) {
-        return await decryptText(encrypted);
-      }
-      return '';
+    const result = await chromeStorageSyncGet<string>(['deepseek_api_key']);
+    const encrypted = result.deepseek_api_key || '';
+    if (encrypted) {
+      return await decryptText(encrypted);
     }
+    return '';
   } catch (error) {
     console.error('[ScriptService] Failed to get DeepSeek key:', error);
     return '';
@@ -432,15 +395,7 @@ export const getStoredDeepSeekKey = async (): Promise<string> => {
 export const setStoredDeepSeekKey = async (apiKey: string): Promise<void> => {
   try {
     const encrypted = await encryptText(apiKey);
-    if (isExtensionEnv) {
-      return new Promise((resolve) => {
-        const storage = chrome.storage.sync || chrome.storage.local;
-        storage.set({ deepseek_api_key: encrypted }, resolve);
-      });
-    } else {
-      localStorage.setItem('deepseek_api_key', encrypted);
-      return Promise.resolve();
-    }
+    await chromeStorageSyncSet({ deepseek_api_key: encrypted });
   } catch (error) {
     console.error('[ScriptService] Failed to set DeepSeek key:', error);
     throw new Error('Failed to save DeepSeek key');
@@ -449,15 +404,8 @@ export const setStoredDeepSeekKey = async (apiKey: string): Promise<void> => {
 
 export const getStoredAIProvider = async (): Promise<AIProvider> => {
   try {
-    if (isExtensionEnv) {
-      return new Promise((resolve) => {
-        chrome.storage.local.get(['ai_provider'], (result: Record<string, unknown>) => {
-          resolve((result.ai_provider as AIProvider) || AIProvider.GOOGLE);
-        });
-      });
-    } else {
-      return (localStorage.getItem('ai_provider') as AIProvider) || AIProvider.GOOGLE;
-    }
+    const result = await chromeStorageGet<AIProvider>(['ai_provider']);
+    return result.ai_provider || AIProvider.GOOGLE;
   } catch (error) {
     console.error('[ScriptService] Failed to get AI provider:', error);
     return AIProvider.GOOGLE;
@@ -466,11 +414,7 @@ export const getStoredAIProvider = async (): Promise<AIProvider> => {
 
 export const setStoredAIProvider = async (provider: AIProvider): Promise<void> => {
   try {
-    if (isExtensionEnv) {
-      await chrome.storage.local.set({ ai_provider: provider });
-    } else {
-      localStorage.setItem('ai_provider', provider);
-    }
+    await chromeStorageSet({ ai_provider: provider });
   } catch (error) {
     console.error('[ScriptService] Failed to set AI provider:', error);
     throw new Error('Failed to save AI provider');
@@ -479,15 +423,8 @@ export const setStoredAIProvider = async (provider: AIProvider): Promise<void> =
 
 export const getStoredLanguage = async (): Promise<Language> => {
   try {
-    if (isExtensionEnv) {
-      return new Promise((resolve) => {
-        chrome.storage.local.get(['app_language'], (result: Record<string, unknown>) => {
-          resolve((result.app_language as Language) || Language.ZH_CN);
-        });
-      });
-    } else {
-      return (localStorage.getItem('app_language') as Language) || Language.ZH_CN;
-    }
+    const result = await chromeStorageGet<Language>(['app_language']);
+    return result.app_language || Language.ZH_CN;
   } catch (error) {
     console.error('[ScriptService] Failed to get language:', error);
     return Language.ZH_CN;
@@ -496,13 +433,32 @@ export const getStoredLanguage = async (): Promise<Language> => {
 
 export const setStoredLanguage = async (lang: Language): Promise<void> => {
   try {
-    if (isExtensionEnv) {
-      await chrome.storage.local.set({ app_language: lang });
-    } else {
-      localStorage.setItem('app_language', lang);
-    }
+    await chromeStorageSet({ app_language: lang });
   } catch (error) {
     console.error('[ScriptService] Failed to set language:', error);
     throw new Error('Failed to save language');
+  }
+};
+
+export const getAutoSyncToGitHub = async (): Promise<boolean> => {
+  try {
+    const result = await chromeStorageGet<boolean>(['auto_sync_github']);
+    const stored = result.auto_sync_github;
+    if (stored === undefined || stored === null) {
+      return true;
+    }
+    return stored;
+  } catch (error) {
+    console.error('[ScriptService] Failed to get auto sync setting:', error);
+    return true;
+  }
+};
+
+export const setAutoSyncToGitHub = async (enabled: boolean): Promise<void> => {
+  try {
+    await chromeStorageSet({ auto_sync_github: enabled });
+  } catch (error) {
+    console.error('[ScriptService] Failed to set auto sync setting:', error);
+    throw new Error('Failed to save auto sync setting');
   }
 };

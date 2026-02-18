@@ -1,14 +1,18 @@
 import React from 'react';
-import { ViewState } from '../types';
+import { ViewState, GitHubUser } from '../types';
 import { ScrollText, FileCode2, Settings } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
+import GitHubUserStatus from './GitHubUserStatus';
 
 interface HeaderProps {
   currentView: ViewState;
   setView: (view: ViewState) => void;
+  gitHubUser: GitHubUser | null;
+  onGitHubLogout: () => void;
+  onGitHubSettings?: () => void;
 }
 
-const Header: React.FC<HeaderProps> = ({ currentView, setView }) => {
+const Header: React.FC<HeaderProps> = ({ currentView, setView, gitHubUser, onGitHubLogout, onGitHubSettings }) => {
   const { t } = useTranslation();
 
   return (
@@ -20,41 +24,47 @@ const Header: React.FC<HeaderProps> = ({ currentView, setView }) => {
         <h1 className="font-bold text-slate-800 tracking-tight text-sm">{t('appTitle')}</h1>
       </div>
       
-      <nav className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
-        <button
-          onClick={() => setView(ViewState.LIST)}
-          className={`flex items-center justify-center w-8 h-8 rounded-md transition-all duration-200 ${
-            currentView === ViewState.LIST 
-              ? 'bg-white text-indigo-600 shadow-sm font-medium' 
-              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
-          }`}
-          title={t('navMyScripts')}
-        >
-          <ScrollText size={16} strokeWidth={2.5} />
-        </button>
-        <button
-          onClick={() => setView(ViewState.EDITOR)}
-          className={`flex items-center justify-center w-8 h-8 rounded-md transition-all duration-200 ${
-            currentView === ViewState.EDITOR 
-              ? 'bg-white text-indigo-600 shadow-sm font-medium' 
-              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
-          }`}
-          title={t('navNewScript')}
-        >
-          <FileCode2 size={16} strokeWidth={2.5} />
-        </button>
-        <button
-          onClick={() => setView(ViewState.SETTINGS)}
-          className={`flex items-center justify-center w-8 h-8 rounded-md transition-all duration-200 ${
-            currentView === ViewState.SETTINGS 
-              ? 'bg-white text-indigo-600 shadow-sm font-medium' 
-              : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
-          }`}
-          title={t('navSettings')}
-        >
-          <Settings size={16} strokeWidth={2.5} />
-        </button>
-      </nav>
+      <div className="flex items-center gap-3">
+        <nav className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+          <button
+            onClick={() => setView(ViewState.LIST)}
+            className={`flex items-center justify-center w-8 h-8 rounded-md transition-all duration-200 ${
+              currentView === ViewState.LIST 
+                ? 'bg-white text-indigo-600 shadow-sm font-medium' 
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+            }`}
+            title={t('navMyScripts')}
+          >
+            <ScrollText size={16} strokeWidth={2.5} />
+          </button>
+          <button
+            onClick={() => setView(ViewState.EDITOR)}
+            className={`flex items-center justify-center w-8 h-8 rounded-md transition-all duration-200 ${
+              currentView === ViewState.EDITOR 
+                ? 'bg-white text-indigo-600 shadow-sm font-medium' 
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+            }`}
+            title={t('navNewScript')}
+          >
+            <FileCode2 size={16} strokeWidth={2.5} />
+          </button>
+          <button
+            onClick={() => setView(ViewState.SETTINGS)}
+            className={`flex items-center justify-center w-8 h-8 rounded-md transition-all duration-200 ${
+              currentView === ViewState.SETTINGS 
+                ? 'bg-white text-indigo-600 shadow-sm font-medium' 
+                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+            }`}
+            title={t('navSettings')}
+          >
+            <Settings size={16} strokeWidth={2.5} />
+          </button>
+        </nav>
+
+        {gitHubUser && (
+          <GitHubUserStatus user={gitHubUser} onLogout={onGitHubLogout} onOpenSettings={onGitHubSettings} />
+        )}
+      </div>
     </header>
   );
 };

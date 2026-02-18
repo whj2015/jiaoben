@@ -1,7 +1,9 @@
 // assets/content.ts
 // 运行在 Isolated World，负责在页面脚本(Main World)和后台(Background)之间转发消息
 
-import { GM_XHR_REQUEST, GM_XHR_RESPONSE } from './utils/constants';
+// 内联常量，避免模块导入问题
+const GM_XHR_REQUEST = 'EG_GM_xhr_request';
+const GM_XHR_RESPONSE = 'EG_GM_xhr_response';
 
 interface GMXhrRequestEvent extends CustomEvent {
   detail: {
@@ -13,8 +15,6 @@ interface GMXhrRequestEvent extends CustomEvent {
     binary?: boolean;
   };
 }
-
-// GMXhrResponseEvent interface removed as it was unused
 
 console.log('[EdgeGenius] Content Script Loaded');
 

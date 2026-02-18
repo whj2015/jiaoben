@@ -1,0 +1,14 @@
+{
+  "extensionName": {
+    "message": "EdgeGenius - Gestor de Scripts AI",
+    "description": "Nombre de la extensión"
+  },
+  "extensionDescription": {
+    "message": "Un gestor de scripts de usuario estilo Tampermonkey con programación asistida por IA.",
+    "description": "Descripción de la extensión"
+  },
+  "actionTitle": {
+    "message": "EdgeGenius Gestor de Scripts AI",
+    "description": "Título del botón de la barra de herramientas del navegador"
+  }
+}

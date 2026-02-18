@@ -1,28 +1,59 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { UserScript } from '../types';
 import { getScripts, toggleScript, deleteScript, importScripts, exportBackup } from '../services/scriptService';
-import { ToggleLeft, ToggleRight, Edit, Trash2, Box, Upload, Download } from 'lucide-react';
+import { ToggleLeft, ToggleRight, Edit, Trash2, Box, Upload, Download, Search, Cloud } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
 import { escapeHtml } from '../utils/helpers';
+import { useToast } from './Toast';
+import { isGitHubAuthenticated } from '../services/githubAuth';
+import { checkScriptExistsInRepo, deleteScriptFromRepo } from '../services/githubRepo';
 
 interface ScriptListProps {
   onEdit: (script: UserScript) => void;
 }
 
+interface ScriptWithCloudStatus extends UserScript {
+  isCloudScript?: boolean;
+}
+
 const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
-  const [scripts, setScripts] = useState<UserScript[]>([]);
+  const [scripts, setScripts] = useState<ScriptWithCloudStatus[]>([]);
+  const [filteredScripts, setFilteredScripts] = useState<ScriptWithCloudStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isGitHubAuthed, setIsGitHubAuthed] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { t } = useTranslation();
+  const { showToast, showConfirmWithOption } = useToast();
 
   const loadScripts = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await getScripts();
-      setScripts(data);
+      
+      const authed = await isGitHubAuthenticated();
+      setIsGitHubAuthed(authed);
+      
+      if (authed && data.length > 0) {
+        const scriptsWithStatus = await Promise.all(
+          data.map(async (script) => {
+            try {
+              const result = await checkScriptExistsInRepo(script.name);
+              return { ...script, isCloudScript: result.exists };
+            } catch {
+              return { ...script, isCloudScript: false };
+            }
+          })
+        );
+        setScripts(scriptsWithStatus);
+        setFilteredScripts(scriptsWithStatus);
+      } else {
+        setScripts(data);
+        setFilteredScripts(data);
+      }
     } catch (err) {
       console.error('[ScriptList] Failed to load scripts:', err);
       setError(t('importError') + (err instanceof Error ? err.message : 'Unknown error'));
@@ -35,28 +66,72 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
     loadScripts();
   }, [loadScripts]);
 
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredScripts(scripts);
+    } else {
+      const query = searchQuery.toLowerCase();
+      setFilteredScripts(scripts.filter(script => 
+        script.name.toLowerCase().includes(query) ||
+        script.description?.toLowerCase().includes(query) ||
+        script.match.some(m => m.toLowerCase().includes(query))
+      ));
+    }
+  }, [scripts, searchQuery]);
+
   const handleToggle = useCallback(async (id: string, current: boolean) => {
     try {
       await toggleScript(id, !current);
       await loadScripts();
     } catch (err) {
       console.error('[ScriptList] Failed to toggle script:', err);
-      setError(t('importError') + (err instanceof Error ? err.message : 'Unknown error'));
+      showToast(t('importError') + (err instanceof Error ? err.message : 'Unknown error'), 'error');
     }
-  }, [loadScripts, t]);
+  }, [loadScripts, t, showToast]);
 
-  const handleDelete = useCallback(async (e: React.MouseEvent, id: string) => {
+  const handleDelete = useCallback(async (e: React.MouseEvent, script: ScriptWithCloudStatus) => {
     e.stopPropagation();
-    if (confirm(t('confirmDelete'))) {
-      try {
-        await deleteScript(id);
-        await loadScripts();
-      } catch (err) {
-        console.error('[ScriptList] Failed to delete script:', err);
-        setError(t('importError') + (err instanceof Error ? err.message : 'Unknown error'));
-      }
+    
+    if (script.isCloudScript && isGitHubAuthed) {
+      showConfirmWithOption(
+        t('confirmDelete'),
+        t('deleteFromCloud') || '同时删除云端保存的脚本',
+        async (deleteFromCloud: boolean) => {
+          try {
+            await deleteScript(script.id);
+            
+            if (deleteFromCloud) {
+              const result = await deleteScriptFromRepo(script.name);
+              if (!result.success) {
+                console.warn('[ScriptList] Failed to delete from cloud:', result.error);
+              }
+            }
+            
+            await loadScripts();
+            showToast(t('delete') + ' ' + t('saved').toLowerCase(), 'success');
+          } catch (err) {
+            console.error('[ScriptList] Failed to delete script:', err);
+            showToast(t('importError') + (err instanceof Error ? err.message : 'Unknown error'), 'error');
+          }
+        }
+      );
+    } else {
+      showConfirmWithOption(
+        t('confirmDelete'),
+        '',
+        async () => {
+          try {
+            await deleteScript(script.id);
+            await loadScripts();
+            showToast(t('delete') + ' ' + t('saved').toLowerCase(), 'success');
+          } catch (err) {
+            console.error('[ScriptList] Failed to delete script:', err);
+            showToast(t('importError') + (err instanceof Error ? err.message : 'Unknown error'), 'error');
+          }
+        }
+      );
     }
-  }, [loadScripts, t]);
+  }, [loadScripts, t, showToast, showConfirmWithOption, isGitHubAuthed]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -76,27 +151,27 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
       const file = e.dataTransfer.files[0];
       try {
         const count = await importScripts(file);
-        alert(t('importSuccess', { count: count.toString() }));
+        showToast(t('importSuccess', { count: count.toString() }), 'success');
         await loadScripts();
       } catch (err) {
         console.error('[ScriptList] Import failed:', err);
-        setError(t('importError') + (err instanceof Error ? err.message : 'Unknown error'));
+        showToast(t('importError') + (err instanceof Error ? err.message : 'Unknown error'), 'error');
       }
     }
-  }, [loadScripts, t]);
+  }, [loadScripts, t, showToast]);
 
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       try {
         const count = await importScripts(e.target.files[0]);
-        alert(t('importSuccess', { count: count.toString() }));
+        showToast(t('importSuccess', { count: count.toString() }), 'success');
         await loadScripts();
       } catch (err) {
         console.error('[ScriptList] Import failed:', err);
-        setError(t('importError') + (err instanceof Error ? err.message : 'Unknown error'));
+        showToast(t('importError') + (err instanceof Error ? err.message : 'Unknown error'), 'error');
       }
     }
-  }, [loadScripts, t]);
+  }, [loadScripts, t, showToast]);
 
   if (loading) return <div className="p-10 text-center text-slate-400 text-sm">{t('loading')}</div>;
 
@@ -107,25 +182,40 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <div className="px-4 py-3 bg-white border-b border-slate-200 flex justify-between items-center shadow-sm z-10">
-        <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('installedScripts')}</h2>
-        <div className="flex gap-2">
-          <button 
-            onClick={() => fileInputRef.current?.click()}
-            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
-            title={t('import')}
-          >
-            <Upload size={16} />
-            <input ref={fileInputRef} type="file" accept=".js,.json" className="hidden" onChange={handleFileSelect} />
-          </button>
-          <button 
-            onClick={() => exportBackup()}
-            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
-            title={t('exportBackup')}
-          >
-            <Download size={16} />
-          </button>
+      <div className="px-4 py-3 bg-white border-b border-slate-200 shadow-sm z-10">
+        <div className="flex justify-between items-center mb-3">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('installedScripts')}</h2>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+              title={t('import')}
+            >
+              <Upload size={16} />
+              <input ref={fileInputRef} type="file" accept=".js,.json" className="hidden" onChange={handleFileSelect} />
+            </button>
+            <button 
+              onClick={() => exportBackup()}
+              className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+              title={t('exportBackup')}
+            >
+              <Download size={16} />
+            </button>
+          </div>
         </div>
+        
+        {scripts.length > 0 && (
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('searchPlaceholder') || '搜索脚本...'}
+              className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all bg-slate-50"
+            />
+          </div>
+        )}
       </div>
       
       {error && (
@@ -150,16 +240,25 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
       )}
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {scripts.length === 0 ? (
+        {filteredScripts.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-slate-400 pb-10">
             <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">
               <Box size={32} className="opacity-50" />
             </div>
-            <p className="font-medium text-sm text-slate-600">{t('noScripts')}</p>
-            <p className="text-xs mt-1 text-slate-400">{t('dragDropTip')}</p>
+            {searchQuery ? (
+              <>
+                <p className="font-medium text-sm text-slate-600">{t('noSearchResults') || '未找到匹配的脚本'}</p>
+                <p className="text-xs mt-1 text-slate-400">{t('tryDifferentSearch') || '尝试其他搜索词'}</p>
+              </>
+            ) : (
+              <>
+                <p className="font-medium text-sm text-slate-600">{t('noScripts')}</p>
+                <p className="text-xs mt-1 text-slate-400">{t('dragDropTip')}</p>
+              </>
+            )}
           </div>
         ) : (
-          scripts.map(script => (
+          filteredScripts.map(script => (
             <div key={script.id} className="group bg-white p-4 rounded-xl border border-slate-200 hover:border-indigo-300 hover:shadow-md hover:shadow-indigo-100 transition-all duration-200">
               <div className="flex justify-between items-start mb-3">
                 <div className="flex-1 min-w-0 pr-2">
@@ -170,6 +269,12 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
                       dangerouslySetInnerHTML={{ __html: escapeHtml(script.name) }}
                     />
                     <span className="bg-slate-100 text-slate-500 text-[10px] px-1.5 py-0.5 rounded font-mono">v{escapeHtml(script.version)}</span>
+                    {script.isCloudScript && (
+                      <span className="flex items-center gap-0.5 text-[10px] text-indigo-500 bg-indigo-50 px-1.5 py-0.5 rounded" title={t('cloudScript') || '云端脚本'}>
+                        <Cloud size={10} />
+                        <span>云端</span>
+                      </span>
+                    )}
                   </div>
                   <p 
                     className="text-xs text-slate-500 truncate"
@@ -204,7 +309,7 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
                     <Edit size={14} />
                   </button>
                   <button 
-                    onClick={(e) => handleDelete(e, script.id)}
+                    onClick={(e) => handleDelete(e, script)}
                     className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                     aria-label={t('delete')}
                   >

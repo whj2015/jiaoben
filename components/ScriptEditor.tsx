@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { UserScript, ScriptVersion } from '../types';
 import { DEFAULT_SCRIPT_TEMPLATE, saveScript, createScriptFromCode, deleteScriptVersion, exportScriptFile } from '../services/scriptService';
-import { generateScriptWithAI } from '../services/geminiService';
+import { startAIGeneration, getAIGenerationStatus, completeAIGeneration, cancelAIGeneration } from '../services/backgroundAI';
 import { getActiveTabInfo } from '../services/extensionService';
-import { Save, Sparkles, AlertCircle, ArrowLeft, Link2, History, X, Clock, Split, Trash2, Download, Check } from 'lucide-react';
+import { Save, Sparkles, AlertCircle, ArrowLeft, Link2, History, X, Clock, Split, Trash2, Download, Check, Shield, AlertTriangle } from 'lucide-react';
 import { useTranslation } from '../utils/i18n';
 import { diffLines, processDiffWithContext } from '../utils/simpleDiff';
-import { escapeHtml, formatTimestamp, debounce } from '../utils/helpers';
+import { escapeHtml, formatTimestamp } from '../utils/helpers';
+import { useAIGeneration } from '../App';
+import { useToast } from './Toast';
+import { generateSecurityReport } from '../utils/scriptSecurity';
 
-// 常量定义
-const MAX_SCRIPT_SIZE = 1024 * 1024; // 1MB
+const MAX_SCRIPT_SIZE = 1024 * 1024;
 const MAX_PROMPT_LENGTH = 5000;
-const DEBOUNCE_DELAY = 500;
 const SAVE_STATUS_TIMEOUT = 2000;
 const MIN_CODE_LENGTH_FOR_UPDATE = 20;
 
@@ -107,11 +108,15 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
   const [contextUrl, setContextUrl] = useState<string>('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
   const [localScriptId, setLocalScriptId] = useState<string | undefined>(initialScript?.id);
+  const [scriptName, setScriptName] = useState<string>('');
   const [showHistory, setShowHistory] = useState(false);
   const [viewingVersion, setViewingVersion] = useState<ScriptVersion | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const [securityReport, setSecurityReport] = useState<ReturnType<typeof generateSecurityReport> | null>(null);
+  const [showSecurityWarning, setShowSecurityWarning] = useState(false);
   
   const { t } = useTranslation();
+  const { setStatus } = useAIGeneration();
+  const { showConfirm, showToast } = useToast();
 
   const performInternalSave = useCallback(async (codeToSave: string) => {
     try {
@@ -120,6 +125,8 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
       if (!localScriptId) {
         setLocalScriptId(script.id);
       }
+
+      setScriptName(script.name);
 
       if (initialScript?.history && initialScript.id === script.id) {
         script.history = initialScript.history;
@@ -135,80 +142,148 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
     }
   }, [localScriptId, initialScript, t]);
 
-  const debouncedAIGenerate = useCallback(
-    debounce(async () => {
-      if (!prompt.trim() || isGenerating) return;
-      
-      if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-      }
-      
-      setIsGenerating(true);
-      setError(null);
-      let newCode = "";
-      const isUpdateMode = (code.trim() !== DEFAULT_SCRIPT_TEMPLATE.trim() && code.trim().length > 0) || !!localScriptId;
+  const handleAIGenerate = useCallback(async () => {
+    if (!prompt.trim() || isGenerating) return;
+    
+    setIsGenerating(true);
+    setError(null);
+    const isUpdateMode = (code.trim() !== DEFAULT_SCRIPT_TEMPLATE.trim() && code.trim().length > 0) || !!localScriptId;
+    const currentScriptName = scriptName || (isUpdateMode ? t('editorEdit') : t('editorNew'));
 
-      abortControllerRef.current = new AbortController();
+    setStatus({
+      isGenerating: true,
+      scriptId: localScriptId || null,
+      scriptName: currentScriptName,
+      progress: t('aiGenerating') || 'AI 正在生成...'
+    });
 
-      try {
-        await generateScriptWithAI(prompt, (chunk) => {
-          newCode += chunk;
-          if (newCode.length > MIN_CODE_LENGTH_FOR_UPDATE) setCode(newCode);
-        }, isUpdateMode ? code : undefined, contextUrl);
-        
-        if (newCode) {
-          setCode(newCode);
-          await performInternalSave(newCode);
+    try {
+      await startAIGeneration(
+        prompt,
+        localScriptId || null,
+        currentScriptName,
+        isUpdateMode ? code : undefined,
+        contextUrl
+      );
+
+      const pollInterval = setInterval(async () => {
+        try {
+          const status = await getAIGenerationStatus();
+          
+          if (status.generatedCode && status.generatedCode.length > MIN_CODE_LENGTH_FOR_UPDATE) {
+            setCode(status.generatedCode);
+          }
+          
+          setStatus(prev => ({
+            ...prev,
+            progress: status.progress || (t('aiGenerating') || 'AI 正在生成...')
+          }));
+
+          if (!status.isGenerating) {
+            clearInterval(pollInterval);
+            setIsGenerating(false);
+            
+            if (status.error) {
+              setError(status.error === 'MISSING_API_KEY' ? t('apiKeyMissing') : status.error);
+              setStatus({
+                isGenerating: false,
+                scriptId: null,
+                scriptName: '',
+                progress: ''
+              });
+            } else if (status.generatedCode) {
+              const savedScript = createScriptFromCode(status.generatedCode, localScriptId);
+              setStatus(prev => ({
+                ...prev,
+                scriptName: savedScript.name,
+                progress: t('saving') || '正在保存...'
+              }));
+              await performInternalSave(status.generatedCode);
+              await completeAIGeneration();
+              setStatus({
+                isGenerating: false,
+                scriptId: null,
+                scriptName: '',
+                progress: ''
+              });
+            }
+          }
+        } catch (pollError) {
+          console.error('[ScriptEditor] Poll error:', pollError);
         }
-      } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        setError(errorMessage === 'MISSING_API_KEY' ? t('apiKeyMissing') : t('aiError'));
-      } finally {
-        setIsGenerating(false);
-        abortControllerRef.current = null;
-      }
-    }, DEBOUNCE_DELAY),
-    [prompt, code, localScriptId, contextUrl, performInternalSave, t, isGenerating]
-  );
+      }, 500);
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      setError(errorMessage === 'MISSING_API_KEY' ? t('apiKeyMissing') : t('aiError'));
+      setIsGenerating(false);
+      setStatus({
+        isGenerating: false,
+        scriptId: null,
+        scriptName: '',
+        progress: ''
+      });
+    }
+  }, [prompt, code, localScriptId, contextUrl, performInternalSave, t, isGenerating, scriptName, setStatus]);
 
   useEffect(() => {
     if (initialScript) {
       setCode(initialScript.code);
       setLocalScriptId(initialScript.id);
+      setScriptName(initialScript.name);
     }
     getActiveTabInfo().then(tab => { if (tab?.url) setContextUrl(tab.url); });
   }, [initialScript]);
 
   const handleManualSave = useCallback(async () => {
-    const success = await performInternalSave(code);
-    if (success) {
-      onSave();
+    const report = generateSecurityReport(code);
+    setSecurityReport(report);
+
+    if (report.riskLevel === 'high' && !localScriptId) {
+      showConfirm(
+        `安全警告：${report.warning || '此脚本包含潜在危险操作'}`,
+        async () => {
+          const success = await performInternalSave(code);
+          if (success) {
+            showToast(t('saved'), 'success');
+            onSave();
+          }
+        },
+        () => {
+          showToast('已取消保存', 'info');
+        }
+      );
+    } else {
+      const success = await performInternalSave(code);
+      if (success) {
+        onSave();
+      }
     }
-  }, [code, performInternalSave, onSave]);
+  }, [code, performInternalSave, onSave, localScriptId, showConfirm, showToast, t]);
 
   const handleRestore = useCallback(() => {
-    if (viewingVersion && confirm(t('restoreConfirm'))) {
-      setCode(viewingVersion.code);
-      setViewingVersion(null);
-      setShowHistory(false);
+    if (viewingVersion) {
+      showConfirm(t('restoreConfirm'), () => {
+        setCode(viewingVersion.code);
+        setViewingVersion(null);
+        setShowHistory(false);
+      });
     }
-  }, [viewingVersion, t]);
+  }, [viewingVersion, t, showConfirm]);
 
   const handleDeleteVersion = useCallback(async (e: React.MouseEvent, timestamp: number) => {
     e.stopPropagation();
     if (!initialScript) return;
-    if (confirm(t('confirmDeleteVersion'))) {
+    showConfirm(t('confirmDeleteVersion'), async () => {
       try {
         await deleteScriptVersion(initialScript.id, timestamp);
         initialScript.history = initialScript.history?.filter(h => h.timestamp !== timestamp);
-        // Force re-render by creating new array reference
         initialScript.history = [...(initialScript.history || [])];
       } catch (err) {
         console.error('[ScriptEditor] Failed to delete version:', err);
         setError(t('failedToSave'));
       }
-    }
-  }, [initialScript, t]);
+    });
+  }, [initialScript, t, showConfirm]);
 
   const contextDomain = (() => {
     if (!contextUrl) return t('globalContext');
@@ -279,7 +354,7 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();
-                      debouncedAIGenerate();
+                      handleAIGenerate();
                     }
                   }}
                   placeholder={code.length > 100 || localScriptId ? t('promptUpdatePlaceholder') : t('promptPlaceholder')}
@@ -289,7 +364,7 @@ const ScriptEditor: React.FC<ScriptEditorProps> = ({ initialScript, onSave, onCa
                   aria-label="AI prompt input"
                />
                <button 
-                 onClick={debouncedAIGenerate} 
+                 onClick={handleAIGenerate} 
                  disabled={isGenerating || !prompt} 
                  className={`px-3 rounded-lg text-xs font-bold text-white transition-all flex items-center justify-center gap-1.5 ${isGenerating ? 'bg-slate-300 cursor-wait' : 'bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200'}`}
                  aria-label="Generate with AI"

@@ -1,0 +1,14 @@
+{
+  "extensionName": {
+    "message": "EdgeGenius - AI Script Manager",
+    "description": "Name of the extension"
+  },
+  "extensionDescription": {
+    "message": "A Tampermonkey-style user script manager with AI-assisted programming.",
+    "description": "Description of the extension"
+  },
+  "actionTitle": {
+    "message": "EdgeGenius AI Script Manager",
+    "description": "Title for the browser toolbar button"
+  }
+}
