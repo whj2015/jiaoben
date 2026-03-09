@@ -1,11 +1,4 @@
-interface AIGenerationStatus {
-  isGenerating: boolean;
-  scriptId: string | null;
-  scriptName: string;
-  progress: string;
-  generatedCode: string;
-  error?: string;
-}
+import { AIGenerationStatus } from '../types';
 
 async function sendMessage<T>(type: string, payload?: unknown): Promise<T> {
   return new Promise((resolve, reject) => {

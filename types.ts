@@ -33,7 +33,14 @@ export enum Language {
 
 export enum AIProvider {
   GOOGLE = 'GOOGLE',
-  DEEPSEEK = 'DEEPSEEK'
+  DEEPSEEK = 'DEEPSEEK',
+  CUSTOM = 'CUSTOM'
+}
+
+export interface CustomAIConfig {
+  apiUrl: string;
+  apiKey: string;
+  model: string;
 }
 
 export interface ScriptMetadata {
@@ -145,4 +152,27 @@ export interface GitHubRateLimit {
   remaining: number;
   reset: number;
   used: number;
+}
+
+export interface AIGenerationStatus {
+  isGenerating: boolean;
+  scriptId: string | null;
+  scriptName: string;
+  progress: string;
+  generatedCode?: string;
+  error?: string;
+}
+
+export interface AIGenerationTask {
+  id: string;
+  status: 'pending' | 'generating' | 'completed' | 'error';
+  scriptId: string | null;
+  scriptName: string;
+  progress: string;
+  generatedCode: string;
+  error?: string;
+  startTime: number;
+  requirement: string;
+  currentCode?: string;
+  contextUrl?: string;
 }

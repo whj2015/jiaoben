@@ -1,6 +1,7 @@
-import { GitHubRepo, GitHubContent, GitHubFileCommit } from '../types';
+import { GitHubRepo, GitHubContent, GitHubFileCommit, UserScript } from '../types';
 import { getGitHubSession } from './githubAuth';
 import { getScripts } from './scriptService';
+import { createGitHubError, createRateLimitError, createAuthError } from '../utils/errors';
 
 const GITHUB_API_BASE = 'https://api.github.com';
 const USER_AGENT = 'EdgeGenius/1.0';
@@ -93,16 +94,16 @@ async function handleApiError(response: Response, operation: string): Promise<ne
     if (rateLimitRemaining === '0') {
       const resetTime = response.headers.get('X-RateLimit-Reset');
       const resetDate = resetTime ? new Date(parseInt(resetTime) * 1000) : null;
-      throw new Error(`GitHub API rate limit exceeded. Resets at ${resetDate?.toLocaleString() || 'unknown'}`);
+      throw createRateLimitError(`GitHub API rate limit exceeded. Resets at ${resetDate?.toLocaleString() || 'unknown'}`, resetTime ? parseInt(resetTime) * 1000 : undefined);
     }
-    throw new Error(`Permission denied: ${errorMessage}`);
+    throw createGitHubError(`Permission denied: ${errorMessage}`, response.status);
   }
   
   if (response.status === 401) {
-    throw new Error('GitHub authentication expired. Please log in again.');
+    throw createAuthError('GitHub authentication expired. Please log in again.');
   }
 
-  throw new Error(errorMessage);
+  throw createGitHubError(errorMessage, response.status);
 }
 
 export async function checkRepoExists(owner?: string, repo?: string): Promise<GitHubRepo | null> {
@@ -392,7 +393,7 @@ export async function uploadAllScripts(
       return { success: result.success, error: result.error };
     };
 
-    const chunks: typeof scripts[][] = [];
+    const chunks: UserScript[][] = [];
     for (let i = 0; i < scripts.length; i += concurrency) {
       chunks.push(scripts.slice(i, i + concurrency));
     }

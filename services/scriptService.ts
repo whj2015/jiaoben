@@ -1,18 +1,20 @@
-import { UserScript, Language, AIProvider, ScriptVersion } from '../types';
+import { UserScript, Language, AIProvider, ScriptVersion, CustomAIConfig } from '../types';
 import { validateFilename, validateScriptCode as validateCode } from '../utils/helpers';
 import { encryptText, decryptText } from '../utils/encryption';
 import { parseScriptMetadata } from '../utils/metadata';
 import { 
-  isExtensionEnv, 
   chromeStorageGet, 
   chromeStorageSet, 
   chromeStorageSyncGet, 
   chromeStorageSyncSet 
 } from '../utils/chromeApi';
+import { DEFAULT_SCRIPT_TEMPLATE as CONFIG_DEFAULT_TEMPLATE, APP_CONFIG } from '../config/appConfig';
 
-const MAX_SCRIPT_SIZE = 1024 * 1024;
-const MAX_SCRIPT_NAME_LENGTH = 200;
-const MAX_SCRIPT_COUNT = 500;
+const MAX_SCRIPT_SIZE = APP_CONFIG.SCRIPT.MAX_SIZE;
+const MAX_SCRIPT_NAME_LENGTH = APP_CONFIG.SCRIPT.MAX_NAME_LENGTH;
+const MAX_SCRIPT_COUNT = APP_CONFIG.SCRIPT.MAX_COUNT;
+
+export const DEFAULT_SCRIPT_TEMPLATE = CONFIG_DEFAULT_TEMPLATE;
 
 function validateScriptName(name: string): boolean {
   return validateFilename(name, MAX_SCRIPT_NAME_LENGTH);
@@ -25,23 +27,6 @@ function validateScriptCode(code: string): boolean {
 function sanitizeScriptCode(code: string): string {
   return code.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
 }
-
-export const DEFAULT_SCRIPT_TEMPLATE = `// ==UserScript==
-// @name         新脚本
-// @namespace    https://www.acgline.org/
-// @version      0.1
-// @description  尝试接管世界！
-// @author       You
-// @match        *://*/*
-// @grant        none
-// ==/UserScript==
-
-(function() {
-    'use strict';
-
-    console.log('EdgeGenius 脚本正在运行...');
-    // 在此处编写代码...
-})();`;
 
 export const parseMetadata = parseScriptMetadata;
 
@@ -460,5 +445,32 @@ export const setAutoSyncToGitHub = async (enabled: boolean): Promise<void> => {
   } catch (error) {
     console.error('[ScriptService] Failed to set auto sync setting:', error);
     throw new Error('Failed to save auto sync setting');
+  }
+};
+
+export const getStoredCustomAIConfig = async (): Promise<CustomAIConfig> => {
+  try {
+    const result = await chromeStorageSyncGet<CustomAIConfig>(['custom_ai_config']);
+    const config = result.custom_ai_config || { apiUrl: '', apiKey: '', model: '' };
+    if (config.apiKey) {
+      config.apiKey = await decryptText(config.apiKey);
+    }
+    return config;
+  } catch (error) {
+    console.error('[ScriptService] Failed to get custom AI config:', error);
+    return { apiUrl: '', apiKey: '', model: '' };
+  }
+};
+
+export const setStoredCustomAIConfig = async (config: CustomAIConfig): Promise<void> => {
+  try {
+    const encryptedConfig = {
+      ...config,
+      apiKey: config.apiKey ? await encryptText(config.apiKey) : ''
+    };
+    await chromeStorageSyncSet({ custom_ai_config: encryptedConfig });
+  } catch (error) {
+    console.error('[ScriptService] Failed to set custom AI config:', error);
+    throw new Error('Failed to save custom AI config');
   }
 };

@@ -6,14 +6,15 @@ import ErrorBoundary from './components/ErrorBoundary';
 import GitHubSync from './components/GitHubSync';
 import { ToastProvider, useToast } from './components/Toast';
 import { 
-  ViewState, UserScript, Language, AIProvider,
-  GitHubUser, GitHubAuthState, SyncProgress, SyncResult
+  ViewState, UserScript, Language, AIProvider, CustomAIConfig,
+  GitHubUser, GitHubAuthState, SyncProgress, SyncResult, AIGenerationStatus
 } from './types';
 import { CheckCircle, Eye, EyeOff, AlertTriangle, Globe, Bot, Database, Upload, Download, Github, Cloud, Key, ExternalLink, Check, X, Loader2 } from 'lucide-react';
 import { 
   getStoredApiKey, setStoredApiKey, 
   getStoredDeepSeekKey, setStoredDeepSeekKey,
   getStoredAIProvider, setStoredAIProvider,
+  getStoredCustomAIConfig, setStoredCustomAIConfig,
   exportBackup, importScripts
 } from './services/scriptService';
 import { 
@@ -25,13 +26,6 @@ import {
 } from './services/githubRepo';
 import { LanguageProvider, useTranslation } from './utils/i18n';
 import { getAIGenerationStatus } from './services/backgroundAI';
-
-interface AIGenerationStatus {
-  isGenerating: boolean;
-  scriptId: string | null;
-  scriptName: string;
-  progress: string;
-}
 
 interface AIGenerationContextType {
   status: AIGenerationStatus;
@@ -194,6 +188,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
   const [isValidating, setIsValidating] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [hasCredentials, setHasCredentials] = useState(false);
+  const [customConfig, setCustomConfig] = useState<CustomAIConfig>({ apiUrl: '', apiKey: '', model: '' });
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const { t, language, setLanguage } = useTranslation();
   const { showToast } = useToast();
@@ -204,6 +199,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     getStoredAIProvider().then(setProvider);
     hasGitHubCredentials().then(setHasCredentials);
     getStoredToken().then(token => setGitHubToken(token));
+    getStoredCustomAIConfig().then(config => setCustomConfig(config));
   }, []);
 
   const handleSaveKeys = async () => {
@@ -211,6 +207,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
     await setStoredApiKey(googleKey.trim());
     await setStoredDeepSeekKey(deepseekKey.trim());
     await setStoredAIProvider(provider);
+    await setStoredCustomAIConfig(customConfig);
     setTimeout(() => {
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
@@ -260,7 +257,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
         </div>
         <div className="p-4">
           <div className="flex gap-2 p-1 bg-slate-100 rounded-lg mb-4">
-            {[AIProvider.GOOGLE, AIProvider.DEEPSEEK].map((p) => (
+            {[AIProvider.GOOGLE, AIProvider.DEEPSEEK, AIProvider.CUSTOM].map((p) => (
               <button
                 key={p}
                 onClick={() => setProvider(p)}
@@ -268,22 +265,97 @@ const SettingsView: React.FC<SettingsViewProps> = ({
                   provider === p ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
                 }`}
               >
-                {p === AIProvider.GOOGLE ? 'Google Gemini' : 'DeepSeek'}
+                {p === AIProvider.GOOGLE ? 'Google Gemini' : p === AIProvider.DEEPSEEK ? 'DeepSeek' : t('customAI')}
               </button>
             ))}
           </div>
-          <div className="relative">
-             <input
-               type={showKey ? "text" : "password"}
-               value={provider === AIProvider.GOOGLE ? googleKey : deepseekKey}
-               onChange={(e) => provider === AIProvider.GOOGLE ? setGoogleKey(e.target.value) : setDeepseekKey(e.target.value)}
-               placeholder={provider === AIProvider.GOOGLE ? t('apiKeyPlaceholder') : t('deepseekKeyPlaceholder')}
-               className="w-full pl-3 pr-10 py-2.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all"
-             />
-             <button onClick={() => setShowKey(!showKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-               {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
-             </button>
-          </div>
+          
+          {provider === AIProvider.CUSTOM ? (
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">{t('customApiUrl')}</label>
+                <input
+                  type="text"
+                  value={customConfig.apiUrl}
+                  onChange={(e) => setCustomConfig({ ...customConfig, apiUrl: e.target.value })}
+                  placeholder="https://api.example.com/v1/chat/completions"
+                  className="w-full px-3 py-2.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">{t('customApiKey')}</label>
+                <div className="relative">
+                  <input
+                    type={showKey ? "text" : "password"}
+                    value={customConfig.apiKey}
+                    onChange={(e) => setCustomConfig({ ...customConfig, apiKey: e.target.value })}
+                    placeholder={t('apiKeyPlaceholder')}
+                    className="w-full pl-3 pr-10 py-2.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-none"
+                  />
+                  <button onClick={() => setShowKey(!showKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                    {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500 mb-1 block">{t('customModel')}</label>
+                <input
+                  type="text"
+                  value={customConfig.model}
+                  onChange={(e) => setCustomConfig({ ...customConfig, model: e.target.value })}
+                  placeholder="gpt-3.5-turbo / gpt-4 / claude-3-opus"
+                  className="w-full px-3 py-2.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-none"
+                />
+              </div>
+              <div className="p-2.5 bg-purple-50 rounded-lg border border-purple-100">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold text-purple-700">{t('customAIFormat')}</span>
+                </div>
+                <p className="text-[10px] text-purple-600">{t('customAIGuide')}</p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="relative">
+                 <input
+                   type={showKey ? "text" : "password"}
+                   value={provider === AIProvider.GOOGLE ? googleKey : deepseekKey}
+                   onChange={(e) => provider === AIProvider.GOOGLE ? setGoogleKey(e.target.value) : setDeepseekKey(e.target.value)}
+                   placeholder={provider === AIProvider.GOOGLE ? t('apiKeyPlaceholder') : t('deepseekKeyPlaceholder')}
+                   className="w-full pl-3 pr-10 py-2.5 text-xs border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-none transition-all"
+                 />
+                 <button onClick={() => setShowKey(!showKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                   {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                 </button>
+              </div>
+              {provider === AIProvider.GOOGLE ? (
+                <div className="p-2.5 bg-blue-50 rounded-lg border border-blue-100 flex items-center justify-between">
+                  <p className="text-[10px] text-blue-600">{t('geminiKeyGuide')}</p>
+                  <a
+                    href="https://aistudio.google.com/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] text-blue-600 hover:underline flex items-center gap-0.5 shrink-0 ml-2"
+                  >
+                    {t('getKey')} <ExternalLink size={10} />
+                  </a>
+                </div>
+              ) : (
+                <div className="p-2.5 bg-green-50 rounded-lg border border-green-100 flex items-center justify-between">
+                  <p className="text-[10px] text-green-600">{t('deepseekKeyGuide')}</p>
+                  <a
+                    href="https://platform.deepseek.com/api_keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] text-green-600 hover:underline flex items-center gap-0.5 shrink-0 ml-2"
+                  >
+                    {t('getKey')} <ExternalLink size={10} />
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
+          
           <div className="mt-4 flex justify-end">
             <button
               onClick={handleSaveKeys}

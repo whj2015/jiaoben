@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
-import { getStoredApiKey, getStoredDeepSeekKey, getStoredAIProvider } from "./scriptService";
-import { AIProvider } from "../types";
+import { getStoredApiKey, getStoredDeepSeekKey, getStoredAIProvider, getStoredCustomAIConfig } from "./scriptService";
+import { AIProvider, CustomAIConfig } from "../types";
 
 // 常量定义
 const MAX_RESPONSE_LENGTH = 100000; // 100KB
@@ -214,6 +214,95 @@ const callDeepSeekStream = async (
   }
 };
 
+const callCustomAIStream = async (
+  config: CustomAIConfig,
+  systemInstruction: string,
+  userContent: string | { role: string, content: string }[],
+  onChunk: (text: string) => void
+): Promise<void> => {
+  try {
+    const messages: Array<{ role: string; content: string }> = [];
+    if (systemInstruction) {
+      messages.push({ role: 'system', content: systemInstruction });
+    }
+
+    if (typeof userContent === 'string') {
+      messages.push({ role: 'user', content: userContent });
+    } else if (Array.isArray(userContent)) {
+      messages.push(...userContent);
+    }
+
+    let apiUrl = config.apiUrl.trim();
+    if (!apiUrl) {
+      throw new Error('Custom API URL is not configured');
+    }
+
+    const response = await withTimeout(
+      fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey}`
+        },
+        body: JSON.stringify({
+          model: config.model || 'gpt-3.5-turbo',
+          messages: messages,
+          stream: true,
+          max_tokens: MAX_OUTPUT_TOKENS
+        })
+      }),
+      REQUEST_TIMEOUT
+    );
+
+    if (!response.ok) {
+      const errText = await response.text();
+      throw new Error(`Custom API Error: ${response.status} ${response.statusText} - ${errText}`);
+    }
+
+    const reader = response.body?.getReader();
+    const decoder = new TextDecoder();
+    if (!reader) {
+      throw new Error('No response body');
+    }
+
+    let totalLength = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n');
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6);
+          if (data === '[DONE]') return;
+          
+          try {
+            const json = JSON.parse(data);
+            const content = json.choices[0]?.delta?.content;
+            if (content) {
+              if (totalLength + content.length > MAX_RESPONSE_LENGTH) {
+                onChunk(content.substring(0, MAX_RESPONSE_LENGTH - totalLength));
+                break;
+              }
+              onChunk(content);
+              totalLength += content.length;
+            }
+          } catch (e) {
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[CustomAIService] Stream error:', error);
+    if (error instanceof TimeoutError) {
+      throw new Error('AI request timeout');
+    }
+    throw error;
+  }
+};
+
 export const generateScriptWithAI = async (
   requirement: string,
   onChunk: (text: string) => void,
@@ -229,14 +318,23 @@ export const generateScriptWithAI = async (
     const provider = await getStoredAIProvider();
     
     let apiKey = '';
+    let customConfig: CustomAIConfig | null = null;
+    
     if (provider === AIProvider.GOOGLE) {
       apiKey = await getStoredApiKey();
       if (!apiKey) apiKey = process.env.API_KEY || "";
     } else if (provider === AIProvider.DEEPSEEK) {
       apiKey = await getStoredDeepSeekKey();
+    } else if (provider === AIProvider.CUSTOM) {
+      customConfig = await getStoredCustomAIConfig();
+      apiKey = customConfig.apiKey;
     }
 
-    if (!validateApiKey(apiKey)) {
+    if (provider !== AIProvider.CUSTOM && !validateApiKey(apiKey)) {
+      throw new Error("MISSING_API_KEY");
+    }
+    
+    if (provider === AIProvider.CUSTOM && (!customConfig || !customConfig.apiUrl || !customConfig.apiKey)) {
       throw new Error("MISSING_API_KEY");
     }
 
@@ -246,14 +344,33 @@ export const generateScriptWithAI = async (
     关键规则：
     1. **元数据**：必须以 // ==UserScript== 代码块开头。
        - 必须设置 @namespace 为 'https://www.acgline.org/'
+       - 如果脚本需要发送网络请求，必须添加 @grant GM_xmlhttpRequest
     2. **语言**：**所有的注释和 @description 元数据必须使用中文。**
     3. **纯代码**：仅返回有效的 JavaScript 代码。不要使用 markdown 代码块 (\`\`\`)。
-    4. **健壮性**：
+    4. **网络请求 (重要)**：
+       - **绝对禁止**使用 fetch() 或 XMLHttpRequest 进行跨域请求，会被 CORS 策略阻止。
+       - 必须使用 GM_xmlhttpRequest 进行所有外部网络请求。
+       - GM_xmlhttpRequest 用法示例：
+         \`\`\`javascript
+         GM_xmlhttpRequest({
+           method: 'GET',
+           url: 'https://api.example.com/data',
+           onload: (response) => {
+             const data = JSON.parse(response.responseText);
+             console.log(data);
+           },
+           onerror: (error) => {
+             console.error('请求失败:', error);
+           }
+         });
+         \`\`\`
+       - 如需 Promise 版本，使用 GM.xmlHttpRequest(details) 返回 Promise。
+    5. **健壮性**：
        - 现代网站 (SPA, React, Vue) 内容加载是异步的。
        - **绝对不要**假设元素在 'document-end' 时立即存在。
        - 必须使用 'MutationObserver' 或 'setInterval' 等待元素出现后再操作。
        - 始终将逻辑包裹在 try-catch 块中，防止页面崩溃。
-    5. **安全性**：将代码包裹在 IIFE (立即调用函数表达式) 中，避免污染全局命名空间。
+    6. **安全性**：将代码包裹在 IIFE (立即调用函数表达式) 中，避免污染全局命名空间。
     `;
 
     if (contextUrl) {
@@ -278,11 +395,15 @@ export const generateScriptWithAI = async (
       2. **增量式方法**：优先添加新函数、变量或事件监听器，而不是重写整个脚本结构。
       3. **命名空间完整性**：确保 @namespace 保持为 'https://www.acgline.org/'。
       4. **元数据保留**：除非明确要求更改，否则保留现有的 @name, @match 和其他元数据。
+         - 如果新增网络请求功能，确保添加 @grant GM_xmlhttpRequest
       5. **完整输出**：返回**完整的**更新后脚本代码，而不仅仅是修改部分。
       6. **格式**：仅返回有效的 JavaScript。不要使用 markdown 代码块 (\`\`\`)。
       7. **语言**：**代码中的所有注释和解释必须使用中文。**
-      8. **健壮性**：确保新旧逻辑都能优雅地处理动态 DOM 加载 (SPA)。
-      9. **版本控制**：分析所做的更改。根据语义化版本控制自动增加元数据块中的 @version 号：
+      8. **网络请求**：
+         - **绝对禁止**使用 fetch() 或 XMLHttpRequest 进行跨域请求。
+         - 必须使用 GM_xmlhttpRequest 进行外部网络请求。
+      9. **健壮性**：确保新旧逻辑都能优雅地处理动态 DOM 加载 (SPA)。
+      10. **版本控制**：分析所做的更改。根据语义化版本控制自动增加元数据块中的 @version 号：
          - **补丁 (Patch)** (例如 0.1.0 -> 0.1.1): 用于错误修复、微调或小调整。
          - **次要 (Minor)** (例如 0.1.0 -> 0.2.0): 用于新功能、新函数或重大逻辑更改。
          - **主要 (Major)** (例如 1.0.0 -> 2.0.0): 用于完全重写或破坏性更改。
@@ -297,6 +418,8 @@ export const generateScriptWithAI = async (
 
     if (provider === AIProvider.GOOGLE) {
       await callGeminiStream(apiKey, systemPrompt, userContent, onChunk);
+    } else if (provider === AIProvider.CUSTOM && customConfig) {
+      await callCustomAIStream(customConfig, systemPrompt, userContent, onChunk);
     } else {
       await callDeepSeekStream(apiKey, systemPrompt, userContent, onChunk);
     }
@@ -320,14 +443,23 @@ export const streamChatResponse = async (
     const provider = await getStoredAIProvider();
     
     let apiKey = '';
+    let customConfig: CustomAIConfig | null = null;
+    
     if (provider === AIProvider.GOOGLE) {
       apiKey = await getStoredApiKey();
       if (!apiKey) apiKey = process.env.API_KEY || "";
     } else if (provider === AIProvider.DEEPSEEK) {
       apiKey = await getStoredDeepSeekKey();
+    } else if (provider === AIProvider.CUSTOM) {
+      customConfig = await getStoredCustomAIConfig();
+      apiKey = customConfig.apiKey;
     }
 
-    if (!validateApiKey(apiKey)) {
+    if (provider !== AIProvider.CUSTOM && !validateApiKey(apiKey)) {
+      throw new Error("MISSING_API_KEY");
+    }
+    
+    if (provider === AIProvider.CUSTOM && (!customConfig || !customConfig.apiUrl || !customConfig.apiKey)) {
       throw new Error("MISSING_API_KEY");
     }
 
@@ -335,6 +467,8 @@ export const streamChatResponse = async (
 
     if (provider === AIProvider.GOOGLE) {
       await callGeminiChatStream(apiKey, systemInstruction, sanitizedMessage, onChunk);
+    } else if (provider === AIProvider.CUSTOM && customConfig) {
+      await callCustomAIStream(customConfig, systemInstruction, sanitizedMessage, onChunk);
     } else {
       await callDeepSeekStream(apiKey, systemInstruction, sanitizedMessage, onChunk);
     }

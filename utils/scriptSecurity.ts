@@ -19,7 +19,7 @@ const DANGEROUS_PATTERNS = [
   { pattern: /navigator\.camera|navigator\.mediaDevices/gi, type: 'unsafe' as const, description: '访问摄像头/麦克风' },
   { pattern: /WebSocket/gi, type: 'network' as const, description: '建立 WebSocket 连接' },
   { pattern: /window\.open/gi, type: 'dom' as const, description: '打开新窗口' },
-  { pattern: /atob\s*\(|btoa\s*\(/gi, type: 'safe' as const, description: '使用 Base64 编解码' },
+  { pattern: /atob\s*\(|btoa\s*\(/gi, type: 'dom' as const, description: '使用 Base64 编解码' },
 ];
 
 export function analyzeScriptPermissions(code: string): ScriptPermission[] {

@@ -3,6 +3,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { decryptText, getDeviceKeyForServiceWorker } from './utils/encryption';
+import { AIGenerationStatus, AIGenerationTask } from './types';
 
 const GM_XHR_REQUEST = 'EG_GM_xhr_request';
 const GM_XHR_RESPONSE = 'EG_GM_xhr_response';
@@ -12,29 +13,7 @@ const MAX_RESPONSE_LENGTH = 100000;
 const MAX_INPUT_LENGTH = 10000;
 const MIN_API_KEY_LENGTH = 10;
 const MAX_OUTPUT_TOKENS = 8192;
-
-interface AIGenerationTask {
-  id: string;
-  status: 'pending' | 'generating' | 'completed' | 'error';
-  scriptId: string | null;
-  scriptName: string;
-  progress: string;
-  generatedCode: string;
-  error?: string;
-  startTime: number;
-  requirement: string;
-  currentCode?: string;
-  contextUrl?: string;
-}
-
-interface AIGenerationStatus {
-  isGenerating: boolean;
-  scriptId: string | null;
-  scriptName: string;
-  progress: string;
-  generatedCode: string;
-  error?: string;
-}
+const GM_XHR_TIMEOUT = 60000;
 
 let currentTask: AIGenerationTask | null = null;
 let abortController: AbortController | null = null;
@@ -84,8 +63,9 @@ interface GMXHRDetails {
   data?: string;
   binary?: boolean;
   context?: unknown;
+  timeout?: number;
   onload?: (response: GMXHRResponse) => void;
-  onerror?: (error: { error: string }) => void;
+  onerror?: (error: { error: string; status?: number; statusText?: string }) => void;
 }
 
 type GMSetValue = (key: string, value: unknown) => void;
@@ -228,7 +208,7 @@ function getTaskStatus(task: AIGenerationTask | null): AIGenerationStatus {
     scriptId: task.scriptId,
     scriptName: task.scriptName,
     progress: task.progress,
-    generatedCode: task.generatedCode,
+    generatedCode: task.generatedCode || '',
     error: task.error
   };
 }
@@ -368,14 +348,33 @@ async function executeAIGeneration(task: AIGenerationTask): Promise<void> {
     关键规则：
     1. **元数据**：必须以 // ==UserScript== 代码块开头。
        - 必须设置 @namespace 为 'https://www.acgline.org/'
+       - 如果脚本需要发送网络请求，必须添加 @grant GM_xmlhttpRequest
     2. **语言**：**所有的注释和 @description 元数据必须使用中文。**
     3. **纯代码**：仅返回有效的 JavaScript 代码。不要使用 markdown 代码块 (\`\`\`)。
-    4. **健壮性**：
+    4. **网络请求 (重要)**：
+       - **绝对禁止**使用 fetch() 或 XMLHttpRequest 进行跨域请求，会被 CORS 策略阻止。
+       - 必须使用 GM_xmlhttpRequest 进行所有外部网络请求。
+       - GM_xmlhttpRequest 用法示例：
+         \`\`\`javascript
+         GM_xmlhttpRequest({
+           method: 'GET',
+           url: 'https://api.example.com/data',
+           onload: (response) => {
+             const data = JSON.parse(response.responseText);
+             console.log(data);
+           },
+           onerror: (error) => {
+             console.error('请求失败:', error);
+           }
+         });
+         \`\`\`
+       - 如需 Promise 版本，使用 GM.xmlHttpRequest(details) 返回 Promise。
+    5. **健壮性**：
        - 现代网站 (SPA, React, Vue) 内容加载是异步的。
        - **绝对不要**假设元素在 'document-end' 时立即存在。
        - 必须使用 'MutationObserver' 或 'setInterval' 等待元素出现后再操作。
        - 始终将逻辑包裹在 try-catch 块中，防止页面崩溃。
-    5. **安全性**：将代码包裹在 IIFE (立即调用函数表达式) 中，避免污染全局命名空间。
+    6. **安全性**：将代码包裹在 IIFE (立即调用函数表达式) 中，避免污染全局命名空间。
     `;
 
   if (task.contextUrl) {
@@ -400,11 +399,15 @@ async function executeAIGeneration(task: AIGenerationTask): Promise<void> {
     2. **增量式方法**：优先添加新函数、变量或事件监听器，而不是重写整个脚本结构。
     3. **命名空间完整性**：确保 @namespace 保持为 'https://www.acgline.org/'。
     4. **元数据保留**：除非明确要求更改，否则保留现有的 @name, @match 和其他元数据。
+       - 如果新增网络请求功能，确保添加 @grant GM_xmlhttpRequest
     5. **完整输出**：返回**完整的**更新后脚本代码，而不仅仅是修改部分。
     6. **格式**：仅返回有效的 JavaScript。不要使用 markdown 代码块 (\`\`\`)。
     7. **语言**：**代码中的所有注释和解释必须使用中文。**
-    8. **健壮性**：确保新旧逻辑都能优雅地处理动态 DOM 加载 (SPA)。
-    9. **版本控制**：分析所做的更改。根据语义化版本控制自动增加元数据块中的 @version 号：
+    8. **网络请求**：
+       - **绝对禁止**使用 fetch() 或 XMLHttpRequest 进行跨域请求。
+       - 必须使用 GM_xmlhttpRequest 进行外部网络请求。
+    9. **健壮性**：确保新旧逻辑都能优雅地处理动态 DOM 加载 (SPA)。
+    10. **版本控制**：分析所做的更改。根据语义化版本控制自动增加元数据块中的 @version 号：
        - **补丁 (Patch)** (例如 0.1.0 -> 0.1.1): 用于错误修复、微调或小调整。
        - **次要 (Minor)** (例如 0.1.0 -> 0.2.0): 用于新功能、新函数或重大逻辑更改。
        - **主要 (Major)** (例如 1.0.0 -> 2.0.0): 用于完全重写或破坏性更改。
@@ -559,21 +562,39 @@ if (typeof chrome !== 'undefined' && chrome.tabs) {
     if (message.type === 'GM_XHR') {
       const { method, url, headers, data } = message.payload as XHRPayload;
       
+      console.log('[Background] GM_XHR request received:', { method, url, headers: headers ? Object.keys(headers) : [] });
+      
       if (!url || !isValidUrl(url)) {
-        sendResponse({ error: 'Invalid URL' });
+        console.error('[Background] GM_XHR invalid URL:', url);
+        sendResponse({ error: `Invalid URL: ${url}`, status: 0, statusText: 'Invalid URL' });
         return true;
       }
 
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        console.warn('[Background] GM_XHR request timeout:', url);
+        controller.abort();
+      }, GM_XHR_TIMEOUT);
+
+      const startTime = Date.now();
+      
       fetch(url, {
         method: method || 'GET',
         headers: headers,
-        body: ['GET', 'HEAD'].includes((method || 'GET').toUpperCase()) ? undefined : data
+        body: ['GET', 'HEAD'].includes((method || 'GET').toUpperCase()) ? undefined : data,
+        signal: controller.signal
       })
       .then(async (res) => {
+        clearTimeout(timeoutId);
+        const duration = Date.now() - startTime;
+        console.log(`[Background] GM_XHR response received: ${res.status} ${res.statusText} (${duration}ms)`, url);
+        
         const text = await res.text();
         const responseHeaders = Array.from(res.headers.entries())
           .map(([k, v]) => `${k}: ${v}`)
           .join('\r\n');
+
+        console.log(`[Background] GM_XHR response size: ${text.length} bytes`);
 
         sendResponse({
           status: res.status,
@@ -584,8 +605,26 @@ if (typeof chrome !== 'undefined' && chrome.tabs) {
         });
       })
       .catch(err => {
-        console.error('[Background] XHR error:', err);
-        sendResponse({ error: err instanceof Error ? err.message : 'Unknown error' });
+        clearTimeout(timeoutId);
+        const duration = Date.now() - startTime;
+        
+        if (err.name === 'AbortError') {
+          console.error(`[Background] GM_XHR timeout after ${duration}ms:`, url);
+          sendResponse({ 
+            error: `Request timeout after ${GM_XHR_TIMEOUT / 1000}s`, 
+            status: 0, 
+            statusText: 'Timeout',
+            url: url
+          });
+        } else {
+          console.error('[Background] GM_XHR error:', err.message || err, url);
+          sendResponse({ 
+            error: err instanceof Error ? err.message : 'Unknown error',
+            status: 0,
+            statusText: 'Network Error',
+            url: url
+          });
+        }
       });
       
       return true;
@@ -673,6 +712,9 @@ function injectScript(tabId: number, script: ScriptInfo) {
   chrome.scripting.executeScript({
     target: { tabId: tabId },
     func: (name: string, version: string, description: string, userCode: string) => {
+       const GM_XHR_REQUEST = 'EG_GM_xhr_request';
+       const GM_XHR_RESPONSE = 'EG_GM_xhr_response';
+       
        const win = window as unknown as {
          GM_info?: GMInfo;
          GM_setValue?: GMSetValue;
@@ -704,18 +746,66 @@ function injectScript(tabId: number, script: ScriptInfo) {
 
        win.GM_xmlhttpRequest = (details: GMXHRDetails) => {
           const requestId = 'gm_xhr_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+          const timeout = (details as unknown as { timeout?: number }).timeout || 60000;
+          let timeoutId: ReturnType<typeof setTimeout> | null = null;
+          let isCompleted = false;
           
-          const handler = (event: Event) => {
-             const customEvent = event as CustomEvent;
-             const detail = customEvent.detail as { requestId: string; error?: string } & Partial<GMXHRResponse>;
-             const { requestId: respId, error, ...response } = detail;
+          console.log(`[${logPrefix}] GM_xmlhttpRequest starting:`, {
+            url: details.url,
+            method: details.method || 'GET',
+            timeout: timeout
+          });
+          
+          const cleanup = () => {
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+              timeoutId = null;
+            }
+            window.removeEventListener('message', handler);
+          };
+          
+          timeoutId = setTimeout(() => {
+            if (isCompleted) return;
+            isCompleted = true;
+            cleanup();
+            
+            console.error(`[${logPrefix}] GM_xmlhttpRequest timeout:`, details.url);
+            if (details.onerror) {
+              details.onerror({ 
+                error: `Request timeout after ${timeout / 1000}s`,
+                status: 0,
+                statusText: 'Timeout'
+              });
+            }
+          }, timeout);
+          
+          const handler = (event: MessageEvent) => {
+             if (event.source !== window) return;
+             if (event.data?.type !== GM_XHR_RESPONSE) return;
+             
+             const { requestId: respId, error, ...response } = event.data;
              if (respId !== requestId) return;
              
-             window.removeEventListener(GM_XHR_RESPONSE, handler);
+             if (isCompleted) return;
+             isCompleted = true;
+             cleanup();
              
              if (error) {
-               if (details.onerror) details.onerror({ error });
+               console.error(`[${logPrefix}] GM_xmlhttpRequest error:`, error, details.url);
+               if (details.onerror) {
+                 details.onerror({ 
+                   error,
+                   status: response.status || 0,
+                   statusText: response.statusText || 'Error'
+                 });
+               }
              } else {
+               console.log(`[${logPrefix}] GM_xmlhttpRequest success:`, {
+                 status: response.status,
+                 statusText: response.statusText,
+                 responseSize: response.responseText?.length || 0,
+                 url: details.url
+               });
                const respObj: GMXHRResponse = {
                  finalUrl: response.finalUrl,
                  readyState: 4,
@@ -730,22 +820,24 @@ function injectScript(tabId: number, script: ScriptInfo) {
              }
           };
 
-          window.addEventListener(GM_XHR_RESPONSE, handler);
+          window.addEventListener('message', handler);
 
-          window.dispatchEvent(new CustomEvent(GM_XHR_REQUEST, {
-             detail: {
-               requestId,
-               method: details.method,
-               url: details.url,
-               headers: details.headers,
-               data: details.data,
-               binary: details.binary
-             }
-          }));
+          window.postMessage({
+             type: GM_XHR_REQUEST,
+             requestId,
+             method: details.method,
+             url: details.url,
+             headers: details.headers,
+             data: details.data,
+             binary: details.binary
+          }, '*');
 
           return {
              abort: () => { 
-                window.removeEventListener(GM_XHR_RESPONSE, handler);
+                if (isCompleted) return;
+                isCompleted = true;
+                cleanup();
+                console.log(`[${logPrefix}] GM_xmlhttpRequest aborted:`, details.url);
              }
           };
        };

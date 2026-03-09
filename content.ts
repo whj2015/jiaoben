@@ -5,22 +5,30 @@
 const GM_XHR_REQUEST = 'EG_GM_xhr_request';
 const GM_XHR_RESPONSE = 'EG_GM_xhr_response';
 
-interface GMXhrRequestEvent extends CustomEvent {
-  detail: {
-    requestId: string;
-    method?: string;
-    url: string;
-    headers?: Record<string, string>;
-    data?: string;
-    binary?: boolean;
-  };
+interface GMXhrRequestMessage {
+  type: string;
+  requestId: string;
+  method?: string;
+  url: string;
+  headers?: Record<string, string>;
+  data?: string;
+  binary?: boolean;
 }
 
 console.log('[EdgeGenius] Content Script Loaded');
 
-const handleGMXhrRequest = async (event: Event) => {
-  const customEvent = event as GMXhrRequestEvent;
-  const { requestId, ...requestDetails } = customEvent.detail;
+const handleMessage = async (event: MessageEvent) => {
+  if (event.source !== window) return;
+  if (event.data?.type !== GM_XHR_REQUEST) return;
+
+  const { requestId, ...requestDetails } = event.data as GMXhrRequestMessage;
+  const startTime = Date.now();
+  
+  console.log('[Content] GM_XHR request started:', { 
+    requestId, 
+    url: requestDetails.url, 
+    method: requestDetails.method || 'GET' 
+  });
 
   try {
     if (!requestDetails.url || typeof requestDetails.url !== 'string') {
@@ -32,26 +40,39 @@ const handleGMXhrRequest = async (event: Event) => {
       payload: requestDetails
     });
 
-    window.dispatchEvent(new CustomEvent(GM_XHR_RESPONSE, {
-      detail: {
-        requestId,
-        ...response
-      }
-    }));
+    const duration = Date.now() - startTime;
+    
+    if (response && response.error) {
+      console.error(`[Content] GM_XHR request failed (${duration}ms):`, response.error, requestDetails.url);
+    } else {
+      console.log(`[Content] GM_XHR request completed (${duration}ms):`, { 
+        status: response?.status, 
+        statusText: response?.statusText,
+        responseSize: response?.responseText?.length || 0
+      });
+    }
+
+    window.postMessage({
+      type: GM_XHR_RESPONSE,
+      requestId,
+      ...response
+    }, '*');
   } catch (error: unknown) {
+    const duration = Date.now() - startTime;
     const errorMessage = error instanceof Error ? error.message : 'Unknown Error';
-    console.error('[Content] XHR request failed:', error);
-    window.dispatchEvent(new CustomEvent(GM_XHR_RESPONSE, {
-      detail: {
-        requestId,
-        error: errorMessage
-      }
-    }));
+    console.error(`[Content] GM_XHR request exception (${duration}ms):`, error, requestDetails.url);
+    window.postMessage({
+      type: GM_XHR_RESPONSE,
+      requestId,
+      error: errorMessage,
+      status: 0,
+      statusText: 'Exception'
+    }, '*');
   }
 };
 
-window.addEventListener(GM_XHR_REQUEST, handleGMXhrRequest);
+window.addEventListener('message', handleMessage);
 
 window.addEventListener('unload', () => {
-  window.removeEventListener(GM_XHR_REQUEST, handleGMXhrRequest);
+  window.removeEventListener('message', handleMessage);
 });

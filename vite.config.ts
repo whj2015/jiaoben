@@ -4,6 +4,7 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import type { Plugin, Rollup } from 'vite';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,7 +13,7 @@ const packageJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.
 const manifestJson = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'manifest.json'), 'utf-8'));
 manifestJson.version = packageJson.version;
 
-const updateManifestPlugin = () => ({
+const updateManifestPlugin = (): Plugin => ({
   name: 'update-manifest-version',
   generateBundle() {
     this.emitFile({
@@ -23,10 +24,10 @@ const updateManifestPlugin = () => ({
   }
 });
 
-const inlineBackgroundDeps = () => ({
+const inlineBackgroundDeps = (): Plugin => ({
   name: 'inline-background-deps',
   enforce: 'post',
-  generateBundle(options, bundle) {
+  generateBundle(_options: Rollup.NormalizedOutputOptions, bundle: Rollup.OutputBundle) {
     const backgroundChunk = bundle['assets/background.js'];
     if (!backgroundChunk || backgroundChunk.type !== 'chunk') return;
     
@@ -44,7 +45,7 @@ const inlineBackgroundDeps = () => ({
         const exportMap: Record<string, string> = {};
         const exportMatch = importedCode.match(/export\s*\{([^}]+)\}/);
         if (exportMatch) {
-          const exports = exportMatch[1].split(',').map(e => e.trim());
+          const exports = exportMatch[1].split(',').map((e: string) => e.trim());
           for (const exp of exports) {
             const parts = exp.split(/\s+as\s+/);
             if (parts.length === 2) {
@@ -71,7 +72,7 @@ const inlineBackgroundDeps = () => ({
     
     const importMatches = bgCode.matchAll(/import\s*\{([^}]+)\}\s*from\s*['"][^'"]+['"]/g);
     for (const match of importMatches) {
-      const imports = match[1].split(',').map(e => e.trim());
+      const imports = match[1].split(',').map((e: string) => e.trim());
       const replacements: string[] = [];
       for (const imp of imports) {
         const parts = imp.split(/\s+as\s+/);
@@ -97,7 +98,7 @@ const inlineBackgroundDeps = () => ({
     backgroundChunk.dynamicImports = [];
     
     for (const chunkName of chunksToInline) {
-      const isUsedByOthers = Object.values(bundle).some(chunk => {
+      const isUsedByOthers = Object.values(bundle).some((chunk: Rollup.OutputAsset | Rollup.OutputChunk) => {
         if (chunk.type === 'chunk' && chunk.fileName !== 'assets/background.js') {
           return chunk.imports?.includes(chunkName);
         }

@@ -104,7 +104,14 @@ const SALT = 'edgegenius_salt_v2';
 const KEY_DERIVATION_ITERATIONS = 100000;
 const KEY_LENGTH = 256;
 
+let cachedDerivedKey: CryptoKey | null = null;
+let cachedKeyPassword: string | null = null;
+
 async function deriveKey(password: string): Promise<CryptoKey> {
+  if (cachedDerivedKey && cachedKeyPassword === password) {
+    return cachedDerivedKey;
+  }
+
   const encoder = new TextEncoder();
   const passwordData = encoder.encode(password);
   const saltData = encoder.encode(SALT);
@@ -117,7 +124,7 @@ async function deriveKey(password: string): Promise<CryptoKey> {
     ['deriveKey']
   );
 
-  return crypto.subtle.deriveKey(
+  const derivedKey = await crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
       salt: saltData,
@@ -129,6 +136,16 @@ async function deriveKey(password: string): Promise<CryptoKey> {
     false,
     ['encrypt', 'decrypt']
   );
+
+  cachedDerivedKey = derivedKey;
+  cachedKeyPassword = password;
+
+  return derivedKey;
+}
+
+export function clearKeyCache(): void {
+  cachedDerivedKey = null;
+  cachedKeyPassword = null;
 }
 
 export async function encryptText(text: string, password?: string): Promise<string> {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { UserScript } from '../types';
 import { getScripts, toggleScript, deleteScript, importScripts, exportBackup } from '../services/scriptService';
 import { ToggleLeft, ToggleRight, Edit, Trash2, Box, Upload, Download, Search, Cloud } from 'lucide-react';
@@ -7,6 +7,7 @@ import { escapeHtml } from '../utils/helpers';
 import { useToast } from './Toast';
 import { isGitHubAuthenticated } from '../services/githubAuth';
 import { checkScriptExistsInRepo, deleteScriptFromRepo } from '../services/githubRepo';
+import { useDebounce } from '../utils/hooks';
 
 interface ScriptListProps {
   onEdit: (script: UserScript) => void;
@@ -18,7 +19,6 @@ interface ScriptWithCloudStatus extends UserScript {
 
 const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
   const [scripts, setScripts] = useState<ScriptWithCloudStatus[]>([]);
-  const [filteredScripts, setFilteredScripts] = useState<ScriptWithCloudStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +27,20 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { t } = useTranslation();
   const { showToast, showConfirmWithOption } = useToast();
+
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  const filteredScripts = useMemo(() => {
+    if (!debouncedSearchQuery.trim()) {
+      return scripts;
+    }
+    const query = debouncedSearchQuery.toLowerCase();
+    return scripts.filter(script => 
+      script.name.toLowerCase().includes(query) ||
+      script.description?.toLowerCase().includes(query) ||
+      script.match.some(m => m.toLowerCase().includes(query))
+    );
+  }, [scripts, debouncedSearchQuery]);
 
   const loadScripts = useCallback(async () => {
     try {
@@ -49,10 +63,8 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
           })
         );
         setScripts(scriptsWithStatus);
-        setFilteredScripts(scriptsWithStatus);
       } else {
         setScripts(data);
-        setFilteredScripts(data);
       }
     } catch (err) {
       console.error('[ScriptList] Failed to load scripts:', err);
@@ -65,19 +77,6 @@ const ScriptList: React.FC<ScriptListProps> = ({ onEdit }) => {
   useEffect(() => {
     loadScripts();
   }, [loadScripts]);
-
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredScripts(scripts);
-    } else {
-      const query = searchQuery.toLowerCase();
-      setFilteredScripts(scripts.filter(script => 
-        script.name.toLowerCase().includes(query) ||
-        script.description?.toLowerCase().includes(query) ||
-        script.match.some(m => m.toLowerCase().includes(query))
-      ));
-    }
-  }, [scripts, searchQuery]);
 
   const handleToggle = useCallback(async (id: string, current: boolean) => {
     try {

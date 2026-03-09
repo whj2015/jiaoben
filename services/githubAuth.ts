@@ -1,7 +1,6 @@
 import { GitHubUser, GitHubSession } from '../types';
 import { encryptText, decryptText } from '../utils/encryption';
 import { 
-  isExtensionEnv, 
   chromeStorageGet, 
   chromeStorageSet, 
   chromeStorageRemove 

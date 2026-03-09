@@ -1,6 +1,6 @@
 export const APP_CONFIG = {
   APP_NAME: 'EdgeGenius',
-  APP_VERSION: '3.2.0',
+  APP_VERSION: '3.4.0',
   
   GITHUB: {
     DEFAULT_REPO_NAME: 'jiaoben-scripts',
@@ -45,12 +45,26 @@ export const DEFAULT_SCRIPT_TEMPLATE = `// ==UserScript==
 // @description  尝试接管世界！
 // @author       You
 // @match        *://*/*
-// @grant        none
+// @grant        GM_xmlhttpRequest
+// @grant        GM.xmlHttpRequest
 // ==/UserScript==
 
 (function() {
     'use strict';
 
     console.log('EdgeGenius 脚本正在运行...');
+
+    // 网络请求示例 (使用 GM_xmlhttpRequest 避免 CORS 问题)
+    // GM_xmlhttpRequest({
+    //     method: 'GET',
+    //     url: 'https://api.example.com/data',
+    //     onload: (response) => {
+    //         console.log('响应:', response.responseText);
+    //     },
+    //     onerror: (error) => {
+    //         console.error('请求失败:', error);
+    //     }
+    // });
+
     // 在此处编写代码...
 })();`;
